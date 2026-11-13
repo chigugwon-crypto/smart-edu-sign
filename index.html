@@ -1,0 +1,4020 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>삼성전자서비스 스마트 교육 서명 시스템</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
+
+
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    canvas { touch-action: none; }
+    body {
+      -webkit-tap-highlight-color: transparent;
+      padding-bottom: env(safe-area-inset-bottom, 20px);
+    }
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 6mm 8mm 6mm 8mm;
+      }
+      html, body {
+        background: white !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        color: black !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .print-only {
+        display: block !important;
+      }
+      #printPreviewModal {
+        position: static !important;
+        display: block !important;
+        background: transparent !important;
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+      #printModalHeader {
+        display: none !important;
+      }
+      .print-page-sheet {
+        page-break-after: always !important;
+        break-after: page !important;
+        box-shadow: none !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        min-height: 270mm !important;
+        max-height: 272mm !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        box-sizing: border-box !important;
+      }
+      .print-page-sheet:last-child {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+      .print-table {
+        page-break-inside: avoid !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen">
+
+  <!-- ==================== TOP NAVIGATION BAR ==================== -->
+  <nav class="bg-slate-900 text-white py-2 px-3 shadow-md no-print sticky top-0 z-40">
+    <div class="max-w-md mx-auto flex items-center justify-between gap-2" id="topNavContent">
+      <!-- Injected dynamically via updateTopNav() -->
+    </div>
+  </nav>
+
+  <!-- ==================== HEADER ==================== -->
+  <header class="bg-white border-b border-slate-200 shadow-xs no-print">
+    <div class="max-w-md mx-auto px-3 py-2 flex items-center justify-between gap-1.5">
+      <div class="flex items-center gap-2 min-w-0 flex-1">
+        <div id="mainHeaderIconBox" class="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0">
+          <i class="fa-solid fa-file-signature text-sm"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <h1 id="mainHeaderTitle" class="text-xs sm:text-sm font-black text-slate-900 tracking-tight leading-tight flex items-center flex-nowrap whitespace-nowrap">
+            교육 완료 서명 <span class="text-[9px] text-blue-700 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded font-bold ml-1">관리자</span>
+          </h1>
+          <div class="flex items-center gap-1.5 mt-0.5 min-w-0">
+            <p id="mainHeaderSubtitle" class="text-[11px] text-blue-600 font-bold truncate leading-tight">원주TC · 1차: 정기 안전보건교육</p>
+            <span id="multiDeviceSyncBadge" class="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full shrink-0">● 실시간연동</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Top Right: Clean Auth Code Badge -->
+      <div class="flex items-center gap-1 shrink-0" id="headerAuthBadgeWrapper">
+        <button type="button" onclick="changeAuthCode()" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 flex items-center gap-1 shadow-2xs whitespace-nowrap active:scale-95" title="인증코드 즉시 랜덤 변경">
+          <i class="fa-solid fa-key text-[10px] text-amber-600"></i>
+          <span>인증코드: <strong id="headerAuthCodeVal">7429</strong></span>
+          <span class="text-[9px] underline ml-0.5 text-amber-700">변경</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN CONTENT CONTAINER ==================== -->
+  <main class="max-w-md mx-auto px-3.5 pt-2.5 space-y-2.5 pb-20">
+
+    <!-- 1. [관리자 모드 전용] 5 Action Buttons Row -->
+    <section id="adminActionsRow" class="grid grid-cols-5 gap-1.5 no-print">
+      <button type="button" onclick="openEduInfoModal()" class="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl bg-blue-50 hover:bg-blue-100/70 border border-blue-200 text-blue-700 transition-all shadow-2xs">
+        <i class="fa-solid fa-pen-to-square text-sm mb-0.5 text-blue-600"></i>
+        <span class="text-[11px] font-bold">수정</span>
+      </button>
+      <button type="button" onclick="openUploadModal()" class="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl bg-amber-50 hover:bg-amber-100/70 border border-amber-200 text-amber-800 transition-all shadow-2xs">
+        <i class="fa-regular fa-calendar-check text-sm mb-0.5 text-amber-600"></i>
+        <span class="text-[11px] font-bold" id="topUploadBtnText">가동/휴무</span>
+      </button>
+      <button type="button" onclick="openShareModal()" class="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200 text-emerald-800 transition-all shadow-2xs">
+        <i class="fa-solid fa-comment-dots text-sm mb-0.5 text-emerald-600"></i>
+        <span class="text-[11px] font-bold">공유/보고</span>
+      </button>
+      <button type="button" onclick="openQrModal()" class="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl bg-purple-50 hover:bg-purple-100/70 border border-purple-200 text-purple-800 transition-all shadow-2xs">
+        <i class="fa-solid fa-qrcode text-sm mb-0.5 text-purple-600"></i>
+        <span class="text-[11px] font-bold">현장 QR</span>
+      </button>
+      <button type="button" onclick="triggerPrintA4()" class="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-all">
+        <i class="fa-solid fa-print text-sm mb-0.5"></i>
+        <span class="text-[11px] font-bold">인쇄</span>
+      </button>
+    </section>
+
+    <!-- Session Date & Location Sub-line -->
+    <div class="text-[11px] text-slate-500 font-medium flex items-center justify-between px-1 no-print">
+      <div class="flex items-center gap-1 truncate">
+        <i class="fa-regular fa-calendar text-slate-400"></i>
+        <span id="sessionDatePlaceDisplay">2026-11-11 | 원주TC / 2층교육장</span>
+      </div>
+    </div>
+
+    <!-- 2. [기사님 서명용 화면 전용] 녹색 박스 안내문구 -->
+    <section id="greenNoticeBox" class="hidden bg-white border-2 border-emerald-400 rounded-2xl p-3.5 shadow-xs no-print">
+      <div class="flex items-start justify-between gap-3 mb-2">
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center text-base shrink-0 shadow-xs" id="greenNoticeIconBox">
+            <i class="fa-solid fa-truck" id="greenNoticeIcon"></i>
+          </div>
+          <h2 class="text-sm font-black text-slate-900 leading-snug" id="greenNoticeTitle">
+            설치기사님 전용 서명 화면 (수정 권한 제한됨)
+          </h2>
+        </div>
+        <div class="w-9 h-9 rounded-full bg-emerald-600 text-white text-[10px] font-black flex flex-col items-center justify-center leading-none shrink-0 shadow-xs">
+          <span>안전</span>
+          <span class="mt-0.5">모드</span>
+        </div>
+      </div>
+      <ol class="space-y-1 text-xs text-slate-700 pl-1 font-medium leading-relaxed" id="greenNoticeList">
+        <li class="flex items-start gap-1.5">
+          <span class="font-black text-emerald-700 shrink-0">1.</span>
+          <span id="greenNoticeItem1">본인 <strong class="text-slate-900 font-black">차량번호 뒷자리(예: 6321)</strong>를 검색하여 서명해주세요.</span>
+        </li>
+        <li class="flex items-start gap-1.5">
+          <span class="font-black text-emerald-700 shrink-0">2.</span>
+          <span id="greenNoticeItem2"><strong class="text-slate-900 font-black">휴무 차량</strong>은 서명 대상에서 자동 제외됩니다.</span>
+        </li>
+        <li class="flex items-start gap-1.5">
+          <span class="font-black text-emerald-700 shrink-0">3.</span>
+          <span id="greenNoticeItem3"><strong class="text-red-600 font-black">1대의 휴대폰으로는 본인 차량 1회만 서명</strong>할 수 있으며, 타인 대리 서명은 불가합니다.</span>
+        </li>
+      </ol>
+    </section>
+
+    <!-- 3. [공통] 당일 교육 회차 선택 -->
+    <section class="bg-white rounded-2xl p-3 border border-slate-200 shadow-xs no-print space-y-2">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-1.5">
+          <i class="fa-solid fa-layer-group text-blue-600 text-xs"></i>
+          <span class="text-xs font-bold text-slate-800">당일 교육 회차 선택</span>
+        </div>
+        <div class="flex items-center gap-1" id="sessionAdminButtons">
+          <button type="button" onclick="openAddSessionModal()" class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 shadow-2xs">
+            + 교육 추가
+          </button>
+          <button type="button" onclick="deleteCurrentSession()" class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">
+            🗑️ 삭제
+          </button>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5" id="sessionPillsContainer">
+        <!-- Rendered dynamically via renderSessionPills() -->
+      </div>
+    </section>
+
+    <!-- 4. [관리자 모드 전용] The Rich Blue Card -->
+    <section id="adminRichBlueCard" class="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 rounded-2xl p-4 text-white shadow-md space-y-3 no-print">
+      <div class="flex items-center justify-between gap-1 flex-wrap">
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/15 border border-white/20 text-white flex items-center gap-1">
+          <i class="fa-solid fa-graduation-cap"></i> 전자 서명 관리 시스템
+        </span>
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400 text-slate-900 flex items-center gap-1 shadow-xs">
+          <i class="fa-solid fa-shield-halved text-[9px]"></i> 코드인증 & 1인1회 보안적용
+        </span>
+      </div>
+
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0 flex-1">
+          <h2 class="text-base font-black tracking-tight leading-snug" id="blueCardTitle">1차: 정기 안전보건교육</h2>
+          <p class="text-[11px] text-blue-100/90 mt-0.5 leading-snug" id="blueCardSubtitle">
+            교육일자: 2026-11-11 | 장소: 원주TC / 2층교육장 | 강사: 안전관리팀
+          </p>
+        </div>
+        <button type="button" onclick="refreshAllData()" class="px-3 py-1.5 rounded-xl bg-white text-blue-700 hover:bg-blue-50 font-black text-xs shadow-sm flex items-center gap-1.5 shrink-0 transition-all active:scale-95 border border-white/60" title="현재 회차 서명 현황 실시간 새로고침">
+          <i class="fa-solid fa-arrows-rotate text-xs text-blue-600" id="refreshIcon"></i>
+          <span>새로고침</span>
+        </button>
+      </div>
+
+      <!-- 4 KPI Boxes -->
+      <div class="grid grid-cols-4 gap-1.5 text-center">
+        <div class="bg-white/10 rounded-xl p-2 backdrop-blur-xs border border-white/10">
+          <p class="text-[10px] text-blue-100 font-medium" id="blueCardKpi1Label">총 등록</p>
+          <p class="text-sm font-black mt-0.5" id="blueCardKpi1Val">0대</p>
+        </div>
+        <div class="bg-white/15 rounded-xl p-2 backdrop-blur-xs border border-white/20">
+          <p class="text-[10px] text-blue-100 font-medium" id="blueCardKpi2Label">가동대상</p>
+          <p class="text-sm font-black mt-0.5 text-amber-300" id="blueCardKpi2Val">0대</p>
+        </div>
+        <div class="bg-white/10 rounded-xl p-2 backdrop-blur-xs border border-white/10">
+          <p class="text-[10px] text-blue-100 font-medium" id="blueCardKpi3Label">당일휴무</p>
+          <p class="text-sm font-black mt-0.5" id="blueCardKpi3Val">0대</p>
+        </div>
+        <div class="bg-white/10 rounded-xl p-2 backdrop-blur-xs border border-white/10">
+          <p class="text-[10px] text-blue-100 font-medium">서명완료</p>
+          <p class="text-sm font-black mt-0.5 text-emerald-300" id="blueCardKpi4Val">0대</p>
+        </div>
+      </div>
+
+      <!-- Progress bar in Blue Card -->
+      <div class="space-y-1 pt-0.5">
+        <div class="flex items-center justify-between text-[11px] text-blue-100 font-bold">
+          <span id="blueCardProgressLabel">가동 대상자 서명 진행률 (미서명: 54대)</span>
+          <span id="blueCardProgressPercent" class="text-amber-300 font-black">0%</span>
+        </div>
+        <div class="w-full h-2 bg-black/20 rounded-full overflow-hidden p-0.5">
+          <div id="blueCardProgressBar" class="h-full bg-gradient-to-r from-amber-300 to-emerald-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Target Audience Selector -->
+    <section class="bg-white rounded-2xl p-3 border border-slate-200 shadow-xs no-print">
+      <div class="flex items-center gap-2.5">
+        <div class="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold shrink-0">
+          <i class="fa-solid fa-users-viewfinder"></i>
+        </div>
+        <div class="flex-1">
+          <div class="flex items-center gap-1.5">
+            <label for="targetGroupSelect" class="text-[11px] font-bold text-slate-600">교육 대상:</label>
+            <div class="relative inline-block">
+              <select id="targetGroupSelect" onchange="handleTargetGroupChange(this.value)" class="appearance-none bg-white border border-slate-300 hover:border-slate-400 text-slate-900 font-black text-xs rounded-lg py-1 pl-2.5 pr-6 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs cursor-pointer">
+                <option value="driver" selected>설치기사</option>
+                <option value="staff">운영스탭</option>
+                <option value="warehouse_day">보관하역(주간)</option>
+                <option value="warehouse_night">보관하역(야간)</option>
+              </select>
+              <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 text-slate-500">
+                <i class="fa-solid fa-chevron-down text-[9px]"></i>
+              </div>
+            </div>
+          </div>
+          <div class="mt-1.5">
+            <span id="currentGroupBadge" class="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+              설치기사: 명단 미등록 (파일 업로드 필요)
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. Search Box -->
+    <section class="no-print">
+      <div class="relative">
+        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+        <input type="text" id="searchInput" oninput="handleSearch(this.value)" placeholder="차량번호 뒷자리(예: 6321) 또는 기사명, 소속 검색" class="w-full bg-white border border-slate-300 rounded-xl py-2 pl-8 pr-8 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs">
+        <button type="button" id="searchClearBtn" onclick="clearSearch()" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-circle-xmark text-xs"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- 7. Status Filter Buttons Row -->
+    <section class="space-y-1.5 no-print">
+      <div class="flex items-center gap-1 overflow-x-auto no-scrollbar pb-0.5">
+        <button type="button" onclick="setStatusFilter('all')" data-status="all" class="status-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all bg-slate-100 text-slate-600 shrink-0">
+          전체 (<span id="countAll">64</span>)
+        </button>
+        <button type="button" onclick="setStatusFilter('work')" data-status="work" class="status-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all bg-blue-600 text-white shadow-xs shrink-0">
+          <span id="statusWorkTabLabel">가동</span> (<span id="countWork">54</span>)
+        </button>
+        <button type="button" onclick="setStatusFilter('off')" data-status="off" class="status-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all bg-slate-100 text-slate-600 shrink-0">
+          휴무 (<span id="countOff">10</span>)
+        </button>
+        <button type="button" onclick="setStatusFilter('unsigned')" data-status="unsigned" class="status-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all bg-slate-100 text-slate-600 shrink-0">
+          미서명 (<span id="countUnsigned">54</span>)
+        </button>
+        <button type="button" onclick="setStatusFilter('signed')" data-status="signed" class="status-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all bg-slate-100 text-slate-600 shrink-0">
+          완료 (<span id="countSigned">0</span>)
+        </button>
+      </div>
+
+      <!-- Result Count Line -->
+      <div class="flex items-center justify-between px-1 text-[11px] text-slate-500 font-medium">
+        <div>
+          조회 결과 <span id="filteredCountText" class="font-bold text-blue-600">54대</span>
+        </div>
+        <div id="activeFilterDesc" class="text-slate-400 text-[10px]">
+          가동자 기준
+        </div>
+      </div>
+
+      <!-- Cell / Team Filter Row -->
+      <div id="cellFilterContainer" class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+      </div>
+    </section>
+
+    <!-- 8. Cards List -->
+    <section id="cardsContainer" class="space-y-2.5 pb-8 no-print">
+    </section>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="hidden text-center py-10 bg-white rounded-2xl border border-slate-200 p-5 no-print">
+      <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2 text-base">
+        <i class="fa-solid fa-user-slash"></i>
+      </div>
+      <h3 class="text-xs font-bold text-slate-800">일치하는 대상자가 없습니다</h3>
+      <p class="text-[11px] text-slate-500 mt-0.5">검색어나 선택된 필터 조건을 확인해주세요.</p>
+      <button type="button" onclick="resetAllFilters()" class="mt-2.5 px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200">
+        필터 초기화
+      </button>
+    </div>
+
+  </main>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- Mode Switch Password Modal -->
+  <div id="adminAuthModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-xs w-full shadow-2xl border border-slate-200 p-5 space-y-3.5 text-center">
+      <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mx-auto text-base">
+        <i class="fa-solid fa-shield-halved"></i>
+      </div>
+      <div>
+        <h3 class="text-sm font-black text-slate-900">관리자 모드 전환</h3>
+        <p class="text-xs text-slate-500 mt-0.5">관리자 비밀번호를 입력해주세요</p>
+      </div>
+      <div>
+        <input type="password" id="adminAuthInput" maxlength="6" placeholder="비밀번호 입력" class="w-full text-center text-sm font-mono tracking-widest bg-slate-50 border border-slate-300 rounded-lg py-2 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+      </div>
+      <div class="flex gap-2">
+        <button type="button" onclick="closeAdminAuthModal()" class="w-1/2 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-600">취소</button>
+        <button type="button" onclick="verifyAdminAuth()" class="w-1/2 py-2 rounded-lg bg-blue-600 text-xs font-bold text-white shadow-xs">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1. Upload & Roster Update Modal -->
+  <div id="uploadModal" class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4 hidden no-print" style="padding-bottom: env(safe-area-inset-bottom, 10px);">
+    <div class="bg-white rounded-t-3xl sm:rounded-2xl max-w-lg w-full flex flex-col shadow-2xl overflow-hidden border border-slate-200" style="max-height: calc(100dvh - 80px); height: calc(100dvh - 80px);">
+      
+      <!-- STICKY HEADER -->
+      <div class="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 sticky top-0 z-20 shadow-2xs">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center text-xs shrink-0">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+          </div>
+          <div class="min-w-0">
+            <h2 class="text-sm font-black text-slate-900 leading-tight">당일 가동/근무 명단 업데이트</h2>
+            <p class="text-[10px] text-slate-500 leading-tight truncate">배차표 첨부 또는 아래 입력창에서 이름 수기 수정 시 즉시 반영</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeUploadModal()" class="w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200 transition-colors ml-2" title="창 닫기">
+          <i class="fa-solid fa-xmark text-base"></i>
+        </button>
+      </div>
+
+      <!-- SCROLLABLE BODY ONLY -->
+      <div class="p-3.5 overflow-y-auto space-y-3 flex-1 text-xs">
+        <div>
+          <label class="block font-bold text-slate-600 mb-1">
+            <i class="fa-solid fa-folder-open text-blue-600 mr-1"></i> 첨부 대상 그룹 선택:
+          </label>
+          <div class="grid grid-cols-2 gap-1.5" id="uploadGroupButtonGroup">
+            <button type="button" onclick="selectUploadTargetGroup('driver')" id="btnUploadGroup_driver" class="p-2 rounded-xl border-2 font-bold text-left flex items-center justify-between transition-all border-blue-600 bg-blue-50 text-blue-800 shadow-xs">
+              <span>1. 설치기사</span>
+              <span class="text-[10px] text-blue-600 font-bold" id="uploadGroupCount_driver">0대</span>
+            </button>
+            <button type="button" onclick="selectUploadTargetGroup('staff')" id="btnUploadGroup_staff" class="p-2 rounded-xl border-2 font-bold text-left flex items-center justify-between transition-all border-slate-200 text-slate-700 hover:border-slate-300">
+              <span>2. 운영스탭</span>
+              <span class="text-[10px] text-slate-400" id="uploadGroupCount_staff">13명</span>
+            </button>
+            <button type="button" onclick="selectUploadTargetGroup('warehouse_day')" id="btnUploadGroup_warehouse_day" class="p-2 rounded-xl border-2 font-bold text-left flex items-center justify-between transition-all border-slate-200 text-slate-700 hover:border-slate-300">
+              <span>3. 보관하역(주간)</span>
+              <span class="text-[10px] text-slate-400" id="uploadGroupCount_warehouse_day">7명</span>
+            </button>
+            <button type="button" onclick="selectUploadTargetGroup('warehouse_night')" id="btnUploadGroup_warehouse_night" class="p-2 rounded-xl border-2 font-bold text-left flex items-center justify-between transition-all border-slate-200 text-slate-700 hover:border-slate-300">
+              <span>4. 보관하역(야간)</span>
+              <span class="text-[10px] text-slate-400" id="uploadGroupCount_warehouse_night">8명</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- DROPZONE -->
+        <div class="border-2 border-dashed border-blue-300 rounded-2xl p-3 text-center bg-blue-50/30 hover:bg-blue-50/60 transition-colors relative cursor-pointer group">
+          <input type="file" id="uploadFileInput" multiple accept="image/*,.xlsx,.xls,.csv,.txt" onchange="handleFileSelected(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+          <div class="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center mx-auto mb-1 shadow-xs group-hover:scale-105 transition-transform">
+            <i class="fa-solid fa-images text-sm"></i>
+          </div>
+          <h3 id="uploadDropzoneTitle" class="text-xs font-black text-slate-900 mb-0.5">
+            [설치기사] 당일 가동/휴무 배차표 사진 첨부 (다중 선택 가능)
+          </h3>
+          <p id="uploadDropzoneDesc" class="text-[10px] text-slate-500 max-w-sm mx-auto">
+            배차표를 위에서 아래 순서대로 나눠 캡처한 사진 여러 장을 한 번에 선택하세요. (사진끼리 겹치는 행이 없어야 합니다)
+          </p>
+        </div>
+
+        <!-- 명단 데이터 수기 수정 / 확인 박스 -->
+        <div id="rosterEditBox" class="bg-slate-50 rounded-xl p-2.5 border border-slate-200 space-y-1.5 relative transition-all">
+          <div class="flex items-center justify-between gap-1 pb-0.5 border-b border-slate-200/60">
+            <span class="font-bold text-slate-800 text-[11px] flex items-center gap-1">
+              <i class="fa-regular fa-clipboard text-slate-500"></i>명단 데이터 수기 수정 / 확인
+            </span>
+            <span class="text-[10px] text-slate-400 font-medium">※ 배차표를 터치해 적용하거나 우측 ✕로 삭제할 수 있습니다</span>
+          </div>
+
+          <div class="flex gap-1.5 flex-wrap items-center pt-0.5" id="presetChipsContainer">
+            <!-- Injected dynamically via renderUploadedChips() -->
+          </div>
+
+          <textarea id="pasteTextArea" rows="5" placeholder="소속 차량번호 성명 가동/휴무 형태로 직접 입력하거나 오타를 수정하실 수 있습니다." class="w-full text-[11px] font-mono bg-white border border-slate-300 rounded-lg p-2 focus:ring-1 focus:ring-blue-500 focus:outline-none"></textarea>
+          
+          <div class="flex justify-between items-center text-[10px] text-slate-500">
+            <span>※ 잘못 표기된 성명은 위 텍스트창에서 직접 타이핑하여 수정한 뒤 파싱 버튼을 누르면 그대로 반영됩니다.</span>
+            <button type="button" onclick="parsePastedText()" class="px-2.5 py-1 bg-slate-700 hover:bg-slate-800 text-white text-[11px] font-bold rounded-lg shadow-xs shrink-0 ml-1">
+              텍스트 파싱 적용
+            </button>
+          </div>
+        </div>
+
+        <!-- 실시간 가동/휴무 분석 결과 박스 -->
+        <div id="uploadAnalysisResult" class="bg-blue-50/70 border border-blue-200 rounded-xl p-2.5 space-y-1.5 relative">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-black text-slate-800 text-[11px] flex items-center gap-1">
+              <i class="fa-solid fa-chart-pie text-blue-600"></i> 실시간 가동/휴무 분석 결과
+            </span>
+            <div class="flex items-center gap-1.5">
+              <span id="analysisBadge" class="font-black text-slate-500 text-xs bg-white px-2 py-0.5 rounded-full border border-slate-200 shadow-2xs">파일 첨부 대기</span>
+              <button type="button" onclick="clearAnalysisResultBox()" class="w-6 h-6 rounded-full text-slate-400 hover:text-slate-700 hover:bg-blue-100 flex items-center justify-center text-xs transition-colors border border-blue-200/60" title="분석 결과 박스 닫기">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          </div>
+          <p id="analysisSummaryText" class="text-[11px] text-slate-700 font-semibold">
+            배차표 파일을 첨부하시면 인원이 자동 계산됩니다.
+          </p>
+          <div id="detectedOffList" class="flex flex-wrap gap-1 pt-0.5">
+          </div>
+          <div class="pt-1.5 border-t border-blue-200/60">
+            <p class="text-[10px] font-bold text-slate-600 mb-1">💡 아래 기사님 이름을 터치하여 가동/휴무를 즉시 전환할 수도 있습니다:</p>
+            <div id="quickToggleRosterPills" class="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-1 bg-white rounded-lg border border-slate-200">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STICKY FOOTER -->
+      <div class="p-3 bg-slate-50 border-t border-slate-200 shrink-0 flex items-center gap-2 sticky bottom-0 z-20 shadow-md">
+        <button type="button" onclick="closeUploadModal()" class="w-1/3 py-2.5 px-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 bg-white shadow-2xs">
+          취소
+        </button>
+        <button type="button" onclick="applyUploadedList()" class="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs shadow-md flex items-center justify-center gap-1 active:scale-95">
+          <i class="fa-solid fa-check"></i>
+          <span id="modalApplyBtnLabel">[설치기사] 명단 및 가동 상태 업데이트 적용</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 2. Signature Pad Modal -->
+  <div id="signatureModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+      <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+        <div>
+          <span id="sigModalGroupTag" class="text-[10px] font-bold text-blue-700 bg-blue-100/60 px-2 py-0.5 rounded">설치기사 서명</span>
+          <h3 id="sigModalPersonName" class="text-sm font-black text-slate-900 mt-0.5">방만수 (강원85자2321)</h3>
+        </div>
+        <button type="button" onclick="closeSignatureModal()" class="w-7 h-7 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center">
+          <i class="fa-solid fa-xmark text-base"></i>
+        </button>
+      </div>
+
+      <div class="p-3.5 space-y-2.5">
+        <div class="bg-blue-50/60 rounded-xl p-2.5 border border-blue-100 text-[11px] text-blue-900 leading-snug">
+          <p class="font-bold mb-0.5"><i class="fa-solid fa-shield-halved mr-1"></i>안전보건 정기교육 이수 서약</p>
+          <p class="text-blue-800/80 text-[10px]">
+            본인은 당일 실시된 물류운영 안전수칙 및 보건관리 지침 교육을 성실히 이수하였음을 확인하고 서명합니다.
+          </p>
+        </div>
+
+        <div class="space-y-1">
+          <div class="flex items-center justify-between text-[11px] text-slate-500 font-semibold px-0.5">
+            <span>서명란 (정자로 직접 서명)</span>
+            <button type="button" onclick="clearSignatureCanvas()" class="text-red-500 hover:text-red-700 text-[11px] font-bold flex items-center gap-0.5">
+              <i class="fa-solid fa-rotate-left"></i> 지우기
+            </button>
+          </div>
+          <div class="border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 relative overflow-hidden" style="height: 140px;">
+            <canvas id="signatureCanvas" class="w-full h-full cursor-crosshair" style="touch-action: none; -webkit-touch-callout: none;"></canvas>
+            <div id="canvasPlaceholder" class="pointer-events-none absolute inset-0 flex items-center justify-center text-slate-300 font-medium text-xs">
+              이곳에 서명해주세요
+            </div>
+          </div>
+        </div>
+
+        <!-- Mandatory 4-digit Auth Code Input Section (ONLY for 설치기사) -->
+        <div id="sigAuthCodeSection" class="bg-amber-50 border border-amber-200 rounded-xl p-2.5 space-y-1">
+          <div class="flex items-center justify-between">
+            <label for="sigAuthCodeInput" class="text-xs font-black text-amber-900 flex items-center gap-1">
+              <i class="fa-solid fa-key text-amber-600"></i> 현장 인증코드 4자리 입력 (기사 전용)
+            </label>
+            <span class="text-[10px] text-amber-700 font-bold bg-amber-100 px-1.5 py-0.2 rounded">대리서명 방지</span>
+          </div>
+          <input type="text" id="sigAuthCodeInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="현장 화면의 4자리 코드 입력" class="w-full text-center text-sm font-mono tracking-widest bg-white border border-amber-300 rounded-lg py-1.5 font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs">
+          <p class="text-[10px] text-amber-800/90 leading-tight">
+            ※ 빔프로젝터 현장 상영 화면 또는 관리자 화면 상단에 표시된 4자리 인증코드를 입력해야만 서명이 저장됩니다.
+          </p>
+        </div>
+
+        <div class="flex items-center justify-between text-[10px] text-slate-400 px-0.5 font-mono">
+          <span>서명일시: <span id="sigModalTimestamp">2026-11-11</span></span>
+          <span>원주TC 물류운영팀</span>
+        </div>
+      </div>
+
+      <div class="p-3 bg-slate-50 border-t border-slate-200 flex items-center gap-2">
+        <button type="button" onclick="closeSignatureModal()" class="w-1/3 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100">
+          취소
+        </button>
+        <button type="button" onclick="saveSignature()" class="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-md flex items-center justify-center gap-1">
+          <i class="fa-solid fa-check"></i> 서명 완료 및 저장
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Dual QR Modal (Worker vs Admin) -->
+  <div id="qrModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+      <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-xs">
+            <i class="fa-solid fa-qrcode"></i>
+          </div>
+          <div>
+            <h3 class="text-xs font-black">스마트폰 연결 QR코드</h3>
+            <p class="text-[10px] text-slate-400">카메라로 비추면 즉시 해당 모드로 연결됩니다</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeQrModal()" class="w-7 h-7 rounded-full text-white/80 hover:text-white hover:bg-white/10 flex items-center justify-center">
+          <i class="fa-solid fa-xmark text-base"></i>
+        </button>
+      </div>
+
+      <div class="p-4 space-y-3 text-center">
+        <div class="flex rounded-xl bg-slate-100 p-1 border border-slate-200">
+          <button type="button" onclick="switchQrTab('worker')" id="qrTab_worker" class="flex-1 py-1.5 rounded-lg text-xs font-black bg-white text-slate-900 shadow-xs flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-truck text-emerald-600"></i> 현장 서명용 QR
+          </button>
+          <button type="button" onclick="switchQrTab('admin')" id="qrTab_admin" class="flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-user-gear text-blue-600"></i> 관리자 전용 QR
+          </button>
+        </div>
+
+        <div class="p-3 bg-white rounded-2xl border border-slate-200 shadow-inner flex flex-col items-center">
+          <div id="qrcodeBox" class="w-48 h-48 flex items-center justify-center bg-white p-1">
+          </div>
+          <span id="qrBadgeNotice" class="mt-2 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+            ✅ 기사용 화면으로 즉시 연결됩니다
+          </span>
+        </div>
+
+        <div id="qrWorkerBanner" class="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-3 text-white text-center shadow-xs space-y-1">
+          <div class="flex items-center justify-between text-xs font-bold">
+            <span class="flex items-center gap-1">
+              <i class="fa-solid fa-key"></i> 현장 확인 인증코드 (대리서명 방지)
+            </span>
+            <button type="button" onclick="changeAuthCode()" class="px-2 py-0.5 rounded-md bg-white/20 hover:bg-white/30 text-[10px] font-black text-white">
+              코드 변경
+            </button>
+          </div>
+          <div class="text-3xl font-black tracking-widest font-mono text-white drop-shadow-xs py-0.5" id="qrModalAuthCode">
+            7429
+          </div>
+          <p class="text-[10px] text-amber-100 leading-tight">
+            ※ 관리자가 코드를 변경하면 <strong>위 QR코드와 핀번호가 함께 즉시 갱신</strong>됩니다.
+          </p>
+        </div>
+
+        <div id="qrAdminBanner" class="hidden bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-3 text-white text-center shadow-xs space-y-1">
+          <div class="text-xs font-bold flex items-center justify-center gap-1">
+            <i class="fa-solid fa-shield-halved"></i> 관리자 제어 모드 바로가기
+          </div>
+          <p class="text-xs text-blue-100 py-1">
+            관리자 폰 카메라로 스캔하면 <strong>관리자 제어 화면</strong>으로 즉시 접속합니다.
+          </p>
+          <p class="text-[10px] text-blue-200 leading-tight">
+            (참석자 명단 수정, 가동/휴무 지정, 서명 삭제, 인쇄 등 전체 권한 활성화)
+          </p>
+        </div>
+
+        <div class="space-y-1.5 text-left">
+          <div class="flex items-center justify-between">
+            <label class="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+              <i class="fa-solid fa-link text-blue-600 text-xs"></i> 연결 주소 (URL)
+            </label>
+            <div class="flex items-center gap-1">
+              <button type="button" onclick="openQrUrlInNewTab()" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-all">
+                새창테스트
+              </button>
+              <button type="button" id="qrCopyBtn" onclick="copyQrUrl()" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-blue-600 text-white hover:bg-blue-700 shadow-xs flex items-center gap-1 transition-all">
+                <i class="fa-solid fa-copy text-[10px]"></i> <span id="qrCopyBtnText">주소 복사</span>
+              </button>
+            </div>
+          </div>
+          <input type="text" id="qrUrlInput" readonly onclick="this.select(); this.setSelectionRange(0, 99999);" class="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-inner">
+        </div>
+
+        <details class="text-left bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs">
+          <summary class="font-bold text-slate-700 cursor-pointer text-[11px] flex items-center justify-between">
+            <span>🌐 배포 도메인 및 서버 DB 설정</span>
+            <span class="text-[10px] text-blue-600 font-normal">설정/확인</span>
+          </summary>
+          <div class="mt-2 space-y-2">
+            <div>
+              <p class="text-[10px] text-slate-500 mb-1">1. 배포된 Netlify 주소 (QR코드 기본 연결 주소):</p>
+              <div class="flex gap-1">
+                <input type="text" id="customDomainInput" placeholder="https://glittering-fairy-c50df8.netlify.app" class="flex-1 text-xs font-mono bg-white border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                <button type="button" onclick="saveCustomDomain()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg shrink-0">저장</button>
+              </div>
+            </div>
+            <div class="pt-1.5 border-t border-slate-200">
+              <p class="text-[10px] text-slate-500 mb-1">2. (선택) Firebase 실시간 DB 주소 (미입력 시 기본 실시간 브로커 자동 작동):</p>
+              <div class="flex gap-1">
+                <input type="text" id="customFirebaseInput" placeholder="https://본인프로젝트.firebaseio.com" class="flex-1 text-xs font-mono bg-white border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                <button type="button" onclick="saveCustomFirebaseUrl()" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shrink-0">연결</button>
+              </div>
+            </div>
+          </div>
+        </details>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. PIN Change Modal -->
+  <div id="pinModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-xs w-full shadow-2xl border border-slate-200 p-4 space-y-3">
+      <div class="text-center">
+        <div class="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-1.5 text-sm">
+          <i class="fa-solid fa-key"></i>
+        </div>
+        <h3 class="text-xs font-black text-slate-900">관리자 비밀번호 변경</h3>
+      </div>
+
+      <div class="space-y-1.5">
+        <div>
+          <label class="text-[10px] font-bold text-slate-600">현재 암호</label>
+          <input type="password" id="currentPinInput" maxlength="6" class="w-full text-center text-xs tracking-widest font-mono bg-slate-50 border border-slate-300 rounded-lg py-1.5">
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-slate-600">새 암호 (숫자 4~6자리)</label>
+          <input type="password" id="newPinInput" maxlength="6" class="w-full text-center text-xs tracking-widest font-mono bg-slate-50 border border-slate-300 rounded-lg py-1.5">
+        </div>
+      </div>
+
+      <div class="flex gap-1.5 pt-1">
+        <button type="button" onclick="closePinModal()" class="w-1/2 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-600">취소</button>
+        <button type="button" onclick="saveNewPin()" class="w-1/2 py-1.5 rounded-lg bg-blue-600 text-xs font-bold text-white shadow-xs">변경 저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add New Education Session Modal -->
+  <div id="addSessionModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-xs w-full shadow-2xl border border-slate-200 p-4 space-y-3">
+      <div class="flex items-center justify-between pb-1.5 border-b border-slate-100">
+        <h3 class="text-xs font-black text-slate-900 flex items-center gap-1.5">
+          <i class="fa-solid fa-folder-plus text-blue-600"></i> 새 교육 회차 추가
+        </h3>
+        <button type="button" onclick="closeAddSessionModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <div>
+          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">교육 과정명 / 회차</label>
+          <input type="text" id="newSessionTitle" placeholder="예: 3차: 직무역량 강화교육 또는 4차" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">기준일자</label>
+          <input type="date" id="newSessionDate" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">교육 장소</label>
+          <input type="text" id="newSessionPlace" value="원주TC / 2층교육장" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">강사 / 주관부서</label>
+          <input type="text" id="newSessionInstructor" value="안전관리팀" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none">
+        </div>
+      </div>
+
+      <div class="flex gap-1.5 pt-1">
+        <button type="button" onclick="closeAddSessionModal()" class="w-1/2 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-50">취소</button>
+        <button type="button" onclick="saveNewSession()" class="w-1/2 py-1.5 rounded-lg bg-blue-600 text-xs font-bold text-white shadow-xs hover:bg-blue-700">추가하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Education Information Edit Modal -->
+  <div id="eduInfoModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-xs w-full shadow-2xl border border-slate-200 p-4 space-y-3">
+      <div class="flex items-center justify-between pb-1.5 border-b border-slate-100">
+        <h3 class="text-xs font-black text-slate-900">교육 세션 정보 수정</h3>
+        <button type="button" onclick="closeEduInfoModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <div>
+          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">교육 과정명</label>
+          <input type="text" id="editEduTitle" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs">
+        </div>
+        <div>
+          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">기준일자</label>
+          <input type="date" id="editEduDate" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs">
+        </div>
+        <div>
+          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">교육 장소</label>
+          <input type="text" id="editEduPlace" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs">
+        </div>
+        <div>
+          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">강사 / 주관부서</label>
+          <input type="text" id="editEduInstructor" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs">
+        </div>
+      </div>
+
+      <div class="flex gap-1.5 pt-1">
+        <button type="button" onclick="closeEduInfoModal()" class="w-1/2 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-600">취소</button>
+        <button type="button" onclick="saveEduInfo()" class="w-1/2 py-1.5 rounded-lg bg-blue-600 text-xs font-bold text-white shadow-xs">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Share & Report Modal -->
+  <div id="shareModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-xs w-full shadow-2xl border border-slate-200 p-4 space-y-3">
+      <div class="flex items-center justify-between pb-1.5 border-b border-slate-100">
+        <h3 class="text-xs font-black text-slate-900">서명 현황 공유 및 보고</h3>
+        <button type="button" onclick="closeShareModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-[11px] font-bold text-slate-600">카카오톡 / 사내 메신저 보고용 문구</label>
+        <textarea id="shareReportText" rows="14" readonly class="w-full text-[11px] font-mono bg-slate-50 border border-slate-300 rounded-lg p-2 leading-relaxed text-slate-800"></textarea>
+      </div>
+
+      <div class="flex gap-1.5">
+        <button type="button" onclick="copyReportText()" class="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-xs flex items-center justify-center gap-1">
+          <i class="fa-solid fa-copy"></i> 보고문구 복사
+        </button>
+        <button type="button" onclick="closeShareModal()" class="w-1/3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-600">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-lg transition-all duration-300 opacity-0 pointer-events-none transform translate-y-2 whitespace-nowrap">
+    알림 메시지
+  </div>
+
+  <!-- A4 Print Preview Screen Modal -->
+  <div id="printPreviewModal" class="fixed inset-0 z-50 bg-slate-900/85 backdrop-blur-xs flex flex-col hidden">
+    <div id="printModalHeader" class="bg-slate-900 text-white px-4 py-2.5 flex items-center justify-between shadow-md shrink-0 border-b border-slate-700">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs">
+          <i class="fa-solid fa-print"></i>
+        </div>
+        <div>
+          <h2 class="text-xs font-black text-white" id="printModalTitleText">인쇄 미리보기 (A4 세로 출력)</h2>
+          <p class="text-[10px] text-slate-400" id="printModalPageDesc">설치기사는 넉넉한 서명 공간 확보를 위해 총 2장으로 분할 인쇄됩니다.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <button type="button" onclick="downloadPdfDirectly()" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-xs flex items-center gap-1.5 transition-all active:scale-95" title="모바일 기기 내부 저장소에 PDF 파일 바로 다운로드">
+          <i class="fa-solid fa-file-arrow-down text-xs"></i> <span>PDF 스마트폰 저장</span>
+        </button>
+        <button type="button" onclick="executeNativePrint()" class="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-xs flex items-center gap-1.5 transition-all active:scale-95" title="모바일 프린터 또는 AirPrint 인쇄">
+          <i class="fa-solid fa-print text-xs"></i> <span>프린터 인쇄</span>
+        </button>
+        <button type="button" onclick="closePrintPreviewModal()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-all">
+          ✕ 닫기
+        </button>
+      </div>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-3 sm:p-6 bg-slate-800/60 flex flex-col items-center gap-6" id="printPagesContainer">
+      <!-- Injected dynamically via openPrintPreviewModal() -->
+    </div>
+  </div>
+
+
+  <script>
+    // ==================== APP STATE & OFFICIAL 11/11 ROSTER DATABASE ====================
+    const STORAGE_KEY = 'edu_sign_app_state_v47';
+
+    const DEFAULT_NETLIFY_URL = "https://glittering-fairy-c50df8.netlify.app";
+
+    const REAL_STAFF_MEMBERS = [
+      { name: '곽준호', role: '대표이사' },
+      { name: '심교인', role: '상무' },
+      { name: '간연주', role: '' },
+      { name: '김기표', role: '' },
+      { name: '김시영', role: '' },
+      { name: '송영운', role: '' },
+      { name: '원치국', role: '' },
+      { name: '원호근', role: '' },
+      { name: '윤병철', role: '' },
+      { name: '이주헌', role: '' },
+      { name: '조병호', role: '' },
+      { name: '조욱현', role: '' },
+      { name: '최동길', role: '' }
+    ];
+    const REAL_STAFF_NAMES = REAL_STAFF_MEMBERS.map(m => m.role ? `${m.name} ${m.role}` : m.name);
+
+    // 보관하역 고정 명단 (스탭처럼 기본 고정 탑재 & 맨 앞 고정 인원 + 나머지 가나다순)
+    const WAREHOUSE_PIN = { warehouse_day: '배연규', warehouse_night: '전원탁' };
+    const WAREHOUSE_FIXED_NAMES = {
+      warehouse_day: ['배연규', '박진영', '박헌수', '안윤식', '이일남', '장도희', '최영철'],
+      warehouse_night: ['전원탁', '김동규', '김상훈', '오경철', '원영구', '이정선', '전영진', '지회영']
+    };
+    const REAL_WAREHOUSE_DAY_MEMBERS = WAREHOUSE_FIXED_NAMES.warehouse_day.map((name, idx) => ({
+      id: `wd-${idx + 1}`,
+      carNo: `WD-${String(idx + 1).padStart(2, '0')}`,
+      driverName: name,
+      role: '',
+      cell: '보관하역(주간)',
+      status: 'work',
+      signed: false,
+      sigData: null
+    }));
+    const REAL_WAREHOUSE_NIGHT_MEMBERS = WAREHOUSE_FIXED_NAMES.warehouse_night.map((name, idx) => ({
+      id: `wn-${idx + 1}`,
+      carNo: `WN-${String(idx + 1).padStart(2, '0')}`,
+      driverName: name,
+      role: '',
+      cell: '보관하역(야간)',
+      status: 'work',
+      signed: false,
+      sigData: null
+    }));
+
+    // 그룹별 기본 고정 명단 반환 헬퍼 (스탭 13명, 보관주간 7명, 보관야간 8명, 그리고 수기 수정된 마스터 명단 보존)
+    function getBaseDefaultRoster(groupKey) {
+      const g = appData && appData.groups && appData.groups[groupKey];
+      if (g && g.customBaseRoster && g.customBaseRoster.length > 0) {
+        return g.customBaseRoster.map(m => ({ ...m }));
+      }
+      if (groupKey === 'staff') {
+        return REAL_STAFF_MEMBERS.map((m, idx) => ({
+          id: `s-${idx + 1}`,
+          carNo: `ST-${String(idx + 1).padStart(2, '0')}`,
+          driverName: m.name,
+          role: m.role,
+          cell: m.role ? '임원진' : '운영지원팀',
+          status: 'work',
+          signed: false,
+          sigData: null
+        }));
+      }
+      if (groupKey === 'warehouse_day') {
+        return REAL_WAREHOUSE_DAY_MEMBERS.map(m => ({ ...m }));
+      }
+      if (groupKey === 'warehouse_night') {
+        return REAL_WAREHOUSE_NIGHT_MEMBERS.map(m => ({ ...m }));
+      }
+      return [];
+    }
+
+    const OFFICIAL_1111_DRIVERS_BACKUP = [{"id": "d-1", "carNo": "강원85자2321", "driverName": "방만수", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-2", "carNo": "강원83바1097", "driverName": "김종호", "cell": "춘천 피닉스", "area": "가평청평", "status": "work"}, {"id": "d-3", "carNo": "강원83바6326", "driverName": "채윤호", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-4", "carNo": "강원83바1540", "driverName": "김규철", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-5", "carNo": "강원83바6313", "driverName": "이충모", "cell": "춘천 피닉스", "area": "화천", "status": "work"}, {"id": "d-6", "carNo": "강원83바6311", "driverName": "윤민호", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-7", "carNo": "강원83바6358", "driverName": "김희석", "cell": "춘천 피닉스", "area": "춘천홍천", "status": "work"}, {"id": "d-8", "carNo": "강원83바6321", "driverName": "박도현", "cell": "춘천 피닉스", "area": "휴무", "status": "off"}, {"id": "d-9", "carNo": "강원85자2328", "driverName": "차성준", "cell": "춘천 피닉스", "area": "춘천가평", "status": "work"}, {"id": "d-10", "carNo": "강원83바6334", "driverName": "양승원", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-11", "carNo": "강원85자2322", "driverName": "이주섭", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-12", "carNo": "강원83바6307", "driverName": "민경재", "cell": "춘천 피닉스", "area": "휴무", "status": "off"}, {"id": "d-13", "carNo": "강원83바1050", "driverName": "조영행", "cell": "충주 이글스", "area": "충주4", "status": "work"}, {"id": "d-14", "carNo": "강원83바6323", "driverName": "이병호", "cell": "충주 이글스", "area": "충주1", "status": "work"}, {"id": "d-15", "carNo": "강원87바1701", "driverName": "김병수", "cell": "충주 이글스", "area": "음성", "status": "work"}, {"id": "d-16", "carNo": "강원83바6306", "driverName": "구현호", "cell": "충주 이글스", "area": "충주5", "status": "work"}, {"id": "d-17", "carNo": "강원83바6337", "driverName": "김정호", "cell": "충주 이글스", "area": "충주2", "status": "work"}, {"id": "d-18", "carNo": "강원83바6354", "driverName": "김동식", "cell": "충주 이글스", "area": "음성", "status": "work"}, {"id": "d-19", "carNo": "강원80바9607", "driverName": "나관병", "cell": "충주 이글스", "area": "비가동", "status": "off"}, {"id": "d-20", "carNo": "강원83바1513", "driverName": "박상현", "cell": "충주 이글스", "area": "괴산", "status": "work"}, {"id": "d-21", "carNo": "강원83바1523", "driverName": "이대호", "cell": "충주 이글스", "area": "충주3", "status": "work"}, {"id": "d-22", "carNo": "강원83바6365", "driverName": "황정남", "cell": "충주 이글스", "area": "충주6", "status": "work"}, {"id": "d-23", "carNo": "강원83바6328", "driverName": "김세동", "cell": "베스트", "area": "인제", "status": "work"}, {"id": "d-24", "carNo": "강원83바6339", "driverName": "서광석", "cell": "베스트", "area": "양평", "status": "work"}, {"id": "d-25", "carNo": "강원83바6309", "driverName": "고승수", "cell": "베스트", "area": "용문", "status": "work"}, {"id": "d-26", "carNo": "강원83바6302", "driverName": "전승구", "cell": "베스트", "area": "서종", "status": "work"}, {"id": "d-27", "carNo": "강원83바6366", "driverName": "이원진", "cell": "베스트", "area": "홍천", "status": "work"}, {"id": "d-28", "carNo": "강원83바6316", "driverName": "김환신", "cell": "베스트", "area": "휴무", "status": "off"}, {"id": "d-29", "carNo": "강원83바6319", "driverName": "김민현", "cell": "베스트", "area": "홍천인제", "status": "work"}, {"id": "d-30", "carNo": "강원83바6336", "driverName": "함형국", "cell": "베스트", "area": "휴무", "status": "off"}, {"id": "d-31", "carNo": "강원83바1040", "driverName": "최종환", "cell": "TOP", "area": "이천시내", "status": "work"}, {"id": "d-32", "carNo": "강원83바6373", "driverName": "원용오", "cell": "TOP", "area": "이천시내", "status": "work"}, {"id": "d-33", "carNo": "강원83바1293", "driverName": "이성영", "cell": "TOP", "area": "이천시내", "status": "work"}, {"id": "d-34", "carNo": "강원83바6363", "driverName": "김영준", "cell": "TOP", "area": "부발", "status": "work"}, {"id": "d-35", "carNo": "강원83바1008", "driverName": "남동훈", "cell": "TOP", "area": "이천외곽", "status": "work"}, {"id": "d-36", "carNo": "강원83바6360", "driverName": "박수현", "cell": "TOP", "area": "여주", "status": "work"}, {"id": "d-37", "carNo": "강원85자2323", "driverName": "김현규", "cell": "TOP", "area": "이천시내", "status": "work"}, {"id": "d-38", "carNo": "강원83바6314", "driverName": "원호성", "cell": "TOP", "area": "이천외곽", "status": "work"}, {"id": "d-39", "carNo": "강원81자2896", "driverName": "지원탁", "cell": "TOP", "area": "장호원", "status": "work"}, {"id": "d-40", "carNo": "강원85자2317", "driverName": "김영진", "cell": "초롱이", "area": "단양", "status": "work"}, {"id": "d-41", "carNo": "강원83바6351", "driverName": "김완기", "cell": "초롱이", "area": "평창", "status": "work"}, {"id": "d-42", "carNo": "강원83바1266", "driverName": "김용락", "cell": "초롱이", "area": "영월", "status": "work"}, {"id": "d-43", "carNo": "강원83바6356", "driverName": "양해준", "cell": "초롱이", "area": "영월", "status": "work"}, {"id": "d-44", "carNo": "강원83바6332", "driverName": "김태영", "cell": "초롱이", "area": "리베로", "status": "work"}, {"id": "d-45", "carNo": "강원83바6355", "driverName": "김동하", "cell": "초롱이", "area": "휴무", "status": "off"}, {"id": "d-46", "carNo": "강원83바6308", "driverName": "박선현", "cell": "초롱이", "area": "제천", "status": "work"}, {"id": "d-47", "carNo": "강원83바1093", "driverName": "안대희", "cell": "초롱이", "area": "제천", "status": "work"}, {"id": "d-48", "carNo": "강원83바6361", "driverName": "김배경", "cell": "초롱이", "area": "소물", "status": "work"}, {"id": "d-49", "carNo": "강원83바6340", "driverName": "오성원", "cell": "베이직", "area": "리베로", "status": "work"}, {"id": "d-50", "carNo": "강원83바1084", "driverName": "홍선일", "cell": "베이직", "area": "단계", "status": "work"}, {"id": "d-51", "carNo": "강원83바6318", "driverName": "지명환", "cell": "베이직", "area": "명륜", "status": "work"}, {"id": "d-52", "carNo": "강원86바8730", "driverName": "이재현", "cell": "베이직", "area": "무실", "status": "work"}, {"id": "d-53", "carNo": "강원85자2319", "driverName": "고도준", "cell": "베이직", "area": "태장", "status": "work"}, {"id": "d-54", "carNo": "강원83바1290", "driverName": "김다빈", "cell": "베이직", "area": "단구", "status": "work"}, {"id": "d-55", "carNo": "강원83바6364", "driverName": "염명성", "cell": "베이직", "area": "기업", "status": "work"}, {"id": "d-56", "carNo": "강원80자1470", "driverName": "하지현", "cell": "베이직", "area": "반곡", "status": "work"}, {"id": "d-57", "carNo": "강원83바6330", "driverName": "김성전", "cell": "베이직", "area": "문막", "status": "work"}, {"id": "d-58", "carNo": "강원83바6347", "driverName": "최용기", "cell": "소물전담", "area": "휴무", "status": "off"}, {"id": "d-59", "carNo": "강원83바6343", "driverName": "김승기", "cell": "소물전담", "area": "휴무", "status": "off"}, {"id": "d-60", "carNo": "강원83바6341", "driverName": "김봉섭", "cell": "소물전담", "area": "휴무", "status": "off"}, {"id": "d-61", "carNo": "강원83바6362", "driverName": "김태식", "cell": "소물전담", "area": "휴무", "status": "off"}, {"id": "d-62", "carNo": "강원83바6350", "driverName": "장지훈", "cell": "에어컨지원", "area": "양평", "status": "work"}, {"id": "d-63", "carNo": "강원83바6345", "driverName": "장필모", "cell": "에어컨지원", "area": "횡성", "status": "work"}, {"id": "d-64", "carNo": "강원83바6367", "driverName": "임성훈", "cell": "에어컨지원", "area": "리베로", "status": "work"}];
+    const OFFICIAL_1112_DRIVERS = [{"id": "d-1", "carNo": "강원85자2321", "driverName": "방만수", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-2", "carNo": "강원83바1097", "driverName": "김종호", "cell": "춘천 피닉스", "area": "춘천홍천", "status": "work"}, {"id": "d-3", "carNo": "강원83바6326", "driverName": "채윤호", "cell": "춘천 피닉스", "area": "휴무", "status": "off"}, {"id": "d-4", "carNo": "강원83바1540", "driverName": "김규철", "cell": "춘천 피닉스", "area": "화천", "status": "work"}, {"id": "d-5", "carNo": "강원83바6313", "driverName": "이충모", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-6", "carNo": "강원83바6311", "driverName": "윤민호", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-7", "carNo": "강원83바6358", "driverName": "김희석", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-8", "carNo": "강원83바6321", "driverName": "박도현", "cell": "춘천 피닉스", "area": "양구", "status": "work"}, {"id": "d-9", "carNo": "강원85자2328", "driverName": "차성준", "cell": "춘천 피닉스", "area": "가평청평", "status": "work"}, {"id": "d-10", "carNo": "강원83바6334", "driverName": "양승원", "cell": "춘천 피닉스", "area": "춘천가평", "status": "work"}, {"id": "d-11", "carNo": "강원85자2322", "driverName": "이주섭", "cell": "춘천 피닉스", "area": "휴무", "status": "off"}, {"id": "d-12", "carNo": "강원83바6307", "driverName": "민경재", "cell": "춘천 피닉스", "area": "휴무", "status": "off"}, {"id": "d-13", "carNo": "강원83바1050", "driverName": "조영행", "cell": "충주 이글스", "area": "충주5", "status": "work"}, {"id": "d-14", "carNo": "강원83바6323", "driverName": "이병호", "cell": "충주 이글스", "area": "충주2", "status": "work"}, {"id": "d-15", "carNo": "강원87바1701", "driverName": "김병수", "cell": "충주 이글스", "area": "괴산", "status": "work"}, {"id": "d-16", "carNo": "강원83바6306", "driverName": "구현호", "cell": "충주 이글스", "area": "충주6", "status": "work"}, {"id": "d-17", "carNo": "강원83바6337", "driverName": "김정호", "cell": "충주 이글스", "area": "충주1", "status": "work"}, {"id": "d-18", "carNo": "강원83바6354", "driverName": "김동식", "cell": "충주 이글스", "area": "음성", "status": "work"}, {"id": "d-19", "carNo": "강원80바9607", "driverName": "나관병", "cell": "충주 이글스", "area": "비가동", "status": "off"}, {"id": "d-20", "carNo": "강원83바1513", "driverName": "박상현", "cell": "충주 이글스", "area": "충주3", "status": "work"}, {"id": "d-21", "carNo": "강원83바1523", "driverName": "이대호", "cell": "충주 이글스", "area": "휴무", "status": "off"}, {"id": "d-22", "carNo": "강원83바6365", "driverName": "황정남", "cell": "충주 이글스", "area": "음성", "status": "work"}, {"id": "d-23", "carNo": "강원83바6328", "driverName": "김세동", "cell": "베스트", "area": "홍천", "status": "work"}, {"id": "d-24", "carNo": "강원83바6339", "driverName": "서광석", "cell": "베스트", "area": "양평", "status": "work"}, {"id": "d-25", "carNo": "강원83바6309", "driverName": "고승수", "cell": "베스트", "area": "휴무", "status": "off"}, {"id": "d-26", "carNo": "강원83바6302", "driverName": "전승구", "cell": "베스트", "area": "여주", "status": "work"}, {"id": "d-27", "carNo": "강원83바6366", "driverName": "이원진", "cell": "베스트", "area": "인제", "status": "work"}, {"id": "d-28", "carNo": "강원83바6316", "driverName": "김환신", "cell": "베스트", "area": "여주", "status": "work"}, {"id": "d-29", "carNo": "강원83바6319", "driverName": "김민현", "cell": "베스트", "area": "서종", "status": "work"}, {"id": "d-30", "carNo": "강원83바6336", "driverName": "함형국", "cell": "베스트", "area": "휴무", "status": "off"}, {"id": "d-31", "carNo": "강원83바1040", "driverName": "최종환", "cell": "TOP", "area": "이천시내", "status": "work"}, {"id": "d-32", "carNo": "강원83바6373", "driverName": "원용오", "cell": "TOP", "area": "이천시내", "status": "work"}, {"id": "d-33", "carNo": "강원83바1293", "driverName": "이성영", "cell": "TOP", "area": "이천시내", "status": "work"}, {"id": "d-34", "carNo": "강원83바6363", "driverName": "김영준", "cell": "TOP", "area": "부발", "status": "work"}, {"id": "d-35", "carNo": "강원83바1008", "driverName": "남동훈", "cell": "TOP", "area": "이천외곽", "status": "work"}, {"id": "d-36", "carNo": "강원83바6360", "driverName": "박수현", "cell": "TOP", "area": "장호원", "status": "work"}, {"id": "d-37", "carNo": "강원85자2323", "driverName": "김현규", "cell": "TOP", "area": "휴무", "status": "off"}, {"id": "d-38", "carNo": "강원83바6314", "driverName": "원호성", "cell": "TOP", "area": "이천외곽", "status": "work"}, {"id": "d-39", "carNo": "강원81자2896", "driverName": "지원탁", "cell": "TOP", "area": "여주", "status": "work"}, {"id": "d-40", "carNo": "강원85자2317", "driverName": "김영진", "cell": "초롱이", "area": "횡성", "status": "work"}, {"id": "d-41", "carNo": "강원83바6351", "driverName": "김완기", "cell": "초롱이", "area": "리베로", "status": "work"}, {"id": "d-42", "carNo": "강원83바1266", "driverName": "김용락", "cell": "초롱이", "area": "영월", "status": "work"}, {"id": "d-43", "carNo": "강원83바6356", "driverName": "양해준", "cell": "초롱이", "area": "단양", "status": "work"}, {"id": "d-44", "carNo": "강원83바6332", "driverName": "김태영", "cell": "초롱이", "area": "휴무", "status": "off"}, {"id": "d-45", "carNo": "강원83바6355", "driverName": "김동하", "cell": "초롱이", "area": "휴무", "status": "off"}, {"id": "d-46", "carNo": "강원83바6308", "driverName": "박선현", "cell": "초롱이", "area": "영월", "status": "work"}, {"id": "d-47", "carNo": "강원83바1093", "driverName": "안대희", "cell": "초롱이", "area": "제천", "status": "work"}, {"id": "d-48", "carNo": "강원83바6361", "driverName": "김배경", "cell": "초롱이", "area": "소물", "status": "work"}, {"id": "d-49", "carNo": "강원83바6340", "driverName": "오성원", "cell": "베이직", "area": "기업", "status": "work"}, {"id": "d-50", "carNo": "강원83바1084", "driverName": "홍선일", "cell": "베이직", "area": "단구", "status": "work"}, {"id": "d-51", "carNo": "강원83바6318", "driverName": "지명환", "cell": "베이직", "area": "문막", "status": "work"}, {"id": "d-52", "carNo": "강원86바8730", "driverName": "이재현", "cell": "베이직", "area": "단계", "status": "work"}, {"id": "d-53", "carNo": "강원85자2319", "driverName": "고도준", "cell": "베이직", "area": "행구", "status": "work"}, {"id": "d-54", "carNo": "강원83바1290", "driverName": "김다빈", "cell": "베이직", "area": "반곡", "status": "work"}, {"id": "d-55", "carNo": "강원83바6364", "driverName": "염명성", "cell": "베이직", "area": "통합", "status": "work"}, {"id": "d-56", "carNo": "강원80자1470", "driverName": "하지현", "cell": "베이직", "area": "휴무", "status": "off"}, {"id": "d-57", "carNo": "강원83바6330", "driverName": "김성전", "cell": "베이직", "area": "리베로", "status": "work"}, {"id": "d-58", "carNo": "강원83바6347", "driverName": "최용기", "cell": "소물전담", "area": "휴무", "status": "off"}, {"id": "d-59", "carNo": "강원83바6343", "driverName": "김승기", "cell": "소물전담", "area": "휴무", "status": "off"}, {"id": "d-60", "carNo": "강원83바6341", "driverName": "김봉섭", "cell": "소물전담", "area": "휴무", "status": "off"}, {"id": "d-61", "carNo": "강원83바6362", "driverName": "김태식", "cell": "소물전담", "area": "휴무", "status": "off"}, {"id": "d-62", "carNo": "강원83바6350", "driverName": "장지훈", "cell": "에어컨지원", "area": "양평", "status": "work"}, {"id": "d-63", "carNo": "강원83바6345", "driverName": "장필모", "cell": "에어컨지원", "area": "횡성", "status": "work"}, {"id": "d-64", "carNo": "강원83바6367", "driverName": "임성훈", "cell": "에어컨지원", "area": "리베로", "status": "work"}];
+    const OFFICIAL_1111_DRIVERS = OFFICIAL_1111_DRIVERS_BACKUP;
+
+    const defaultData = {
+      adminPin: '0000',
+      authCode: '7429',
+      currentMode: 'admin',
+      activeSessionId: 'sess-1',
+      sessions: [
+        {
+          id: 'sess-1',
+          title: '1차: 정기 안전보건교육',
+          date: '2026-11-11',
+          place: '원주TC / 2층교육장',
+          instructor: '안전관리팀'
+        },
+        {
+          id: 'sess-2',
+          title: '2차: 서비스 품질교육',
+          date: '2026-11-11',
+          place: '원주TC / 2층교육장',
+          instructor: 'CS품질혁신팀'
+        }
+      ],
+      groups: {
+        driver: {
+          key: 'driver',
+          name: '설치기사',
+          unit: '대',
+          workTerm: '가동',
+          uploadedFiles: [],
+          roster: []
+        },
+        staff: {
+          key: 'staff',
+          name: '운영스탭',
+          uploadedFiles: [],
+          unit: '명',
+          workTerm: '근무',
+          roster: REAL_STAFF_MEMBERS.map((m, idx) => ({
+            id: `s-${idx + 1}`,
+            carNo: `ST-${String(idx + 1).padStart(2, '0')}`,
+            driverName: m.name,
+            role: m.role,
+            cell: m.role ? '임원진' : '운영지원팀',
+            status: 'work',
+            signed: false,
+            sigData: null
+          }))
+        },
+        warehouse_day: {
+          key: 'warehouse_day',
+          name: '보관하역(주간)',
+          uploadedFiles: [],
+          unit: '명',
+          workTerm: '근무',
+          roster: REAL_WAREHOUSE_DAY_MEMBERS.map(m => ({ ...m }))
+        },
+        warehouse_night: {
+          key: 'warehouse_night',
+          name: '보관하역(야간)',
+          uploadedFiles: [],
+          unit: '명',
+          workTerm: '근무',
+          roster: REAL_WAREHOUSE_NIGHT_MEMBERS.map(m => ({ ...m }))
+        }
+      }
+    };
+
+    let appData = defaultData;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.groups && parsed.groups.driver) {
+          if (!parsed.groups.staff || !parsed.groups.staff.roster || parsed.groups.staff.roster.length === 0) {
+            parsed.groups.staff = defaultData.groups.staff;
+          }
+          if (!parsed.groups.warehouse_day || !parsed.groups.warehouse_day.roster || parsed.groups.warehouse_day.roster.length === 0) {
+            parsed.groups.warehouse_day = defaultData.groups.warehouse_day;
+          }
+          if (!parsed.groups.warehouse_night || !parsed.groups.warehouse_night.roster || parsed.groups.warehouse_night.roster.length === 0) {
+            parsed.groups.warehouse_night = defaultData.groups.warehouse_night;
+          }
+          // 지회영 이름 자동 보정 및 보관하역 직책(반장 등) 완전 제거
+          (parsed.groups.warehouse_day.roster || []).forEach(r => { r.role = ''; });
+          (parsed.groups.warehouse_night.roster || []).forEach(r => {
+            if (r.driverName === '지희영') r.driverName = '지회영';
+            r.role = '';
+          });
+          // 저장된 수기 수정 성명 마스터 사전(customDriverNames)을 배차표 원본 배열에도 즉시 반영하여 앞으로도 계속 수정된 이름 유지!
+          if (parsed.customDriverNames) {
+            [OFFICIAL_1111_DRIVERS_BACKUP, OFFICIAL_1112_DRIVERS].forEach(arr => {
+              arr.forEach(d => {
+                if (parsed.customDriverNames[d.carNo]) {
+                  d.driverName = parsed.customDriverNames[d.carNo].driverName || d.driverName;
+                  d.cell = parsed.customDriverNames[d.carNo].cell || d.cell;
+                }
+              });
+            });
+          }
+          appData = parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('localStorage read error:', e);
+    }
+
+    // ==================== MULTI-DEVICE REALTIME CLOUD & PUB/SUB SYNC ENGINE ====================
+    // 다른 스마트폰(기사님 폰 <-> 관리자 폰) 간 실시간 서명 전송 및 명단/인증코드 동기화 엔진
+    const syncChannel = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('edu_sign_sync_bus') : null;
+    let lastSavedRawState = '';
+    const DEVICE_ID = 'dev-' + Math.random().toString(36).substring(2, 9);
+
+    // 1. MQTT WebSocket Realtime Pub/Sub (별도 가입/설정 없이 즉시 전 세계 스마트폰 간 실시간 동기화!)
+    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v47';
+    const MQTT_TOPIC_STATE = MQTT_TOPIC_BASE + '/state';     // Retained: 명단(가동/휴무), 회차, 인증코드
+    const MQTT_TOPIC_SIG_PREFIX = MQTT_TOPIC_BASE + '/sig/'; // Retained per person: 개별 서명 데이터
+    const MQTT_TOPIC_CMD = MQTT_TOPIC_BASE + '/cmd';         // 실시간 명령 (새로고침 요청, 서명삭제 등)
+    let mqttClient = null;
+    let mqttConnected = false;
+
+    // 2. Optional Firebase Realtime DB REST API (URL 파라미터 ?db= 또는 설정창 입력 시 동시 작동)
+    let FIREBASE_DB_URL = (appData && appData.firebaseDbUrl) ? appData.firebaseDbUrl : '';
+
+    function updateSyncBadgeUI(statusText, isOk) {
+      const badge = document.getElementById('multiDeviceSyncBadge');
+      if (!badge) return;
+      if (isOk) {
+        badge.className = 'text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full shrink-0';
+        badge.textContent = '● ' + (statusText || '실시간연동');
+      } else {
+        badge.className = 'text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded-full shrink-0';
+        badge.textContent = '○ ' + (statusText || '연결중');
+      }
+    }
+
+    // 경량 상태 스냅샷 생성 (서명 이미지를 제외한 명단/가동휴무/회차/인증코드 메타데이터)
+    function buildLightweightStatePayload() {
+      const lightGroups = {};
+      ['driver', 'staff', 'warehouse_day', 'warehouse_night'].forEach(k => {
+        const g = appData.groups[k];
+        if (!g) return;
+        lightGroups[k] = {
+          uploadedFiles: g.uploadedFiles || [],
+          roster: (g.roster || []).map(r => {
+            const sigMeta = {};
+            if (r.signatures) {
+              Object.keys(r.signatures).forEach(sId => {
+                if (r.signatures[sId] && r.signatures[sId].signed) {
+                  sigMeta[sId] = {
+                    signed: true,
+                    sigTime: r.signatures[sId].sigTime || ''
+                  };
+                }
+              });
+            }
+            return {
+              id: r.id,
+              carNo: r.carNo,
+              driverName: r.driverName,
+              role: r.role || '',
+              cell: r.cell,
+              status: r.status,
+              signed: !!r.signed,
+              sigTime: r.sigTime || null,
+              sigMeta: sigMeta
+            };
+          })
+        };
+      });
+
+      return {
+        sender: DEVICE_ID,
+        ts: Date.now(),
+        authCode: appData.authCode || '7429',
+        activeSessionId: appData.activeSessionId || 'sess-1',
+        sessions: appData.sessions || [],
+        customDriverNames: appData.customDriverNames || {},
+        groups: lightGroups
+      };
+    }
+
+    // 원격에서 받은 경량 상태를 현재 기기의 appData에 병합 (기존에 받은 서명 이미지는 보존!)
+    function applyRemoteStatePayload(payload) {
+      if (!payload || !payload.groups) return false;
+      let changed = false;
+
+      if (payload.authCode && payload.authCode !== appData.authCode) {
+        appData.authCode = payload.authCode;
+        const hVal = document.getElementById('headerAuthCodeVal');
+        if (hVal) hVal.textContent = appData.authCode;
+        const mVal = document.getElementById('qrModalAuthCode');
+        if (mVal) mVal.textContent = appData.authCode;
+        changed = true;
+      }
+
+      if (payload.sessions && Array.isArray(payload.sessions) && payload.sessions.length > 0) {
+        appData.sessions = payload.sessions;
+        changed = true;
+      }
+
+      if (payload.activeSessionId && currentMode === 'worker') {
+        appData.activeSessionId = payload.activeSessionId;
+        changed = true;
+      }
+
+      if (payload.customDriverNames) {
+        appData.customDriverNames = { ...(appData.customDriverNames || {}), ...payload.customDriverNames };
+      }
+
+      ['driver', 'staff', 'warehouse_day', 'warehouse_night'].forEach(k => {
+        const remG = payload.groups[k];
+        const locG = appData.groups[k];
+        if (!remG || !locG || !Array.isArray(remG.roster)) return;
+
+        // 만약 원격(관리자)에 명단이 등록되어 있는데 로컬(기사폰)에 명단이 없거나 인원수/가동상태가 다르면 병합
+        if (remG.roster.length > 0 || (currentMode === 'worker' && remG.roster.length === 0 && locG.roster.length > 0)) {
+          const existingMap = {};
+          (locG.roster || []).forEach(it => {
+            const key = (k === 'driver') ? (it.carNo || it.driverName) : it.driverName;
+            existingMap[key] = it;
+          });
+
+          locG.uploadedFiles = remG.uploadedFiles || locG.uploadedFiles || [];
+          locG.roster = remG.roster.map(remItem => {
+            const key = (k === 'driver') ? (remItem.carNo || remItem.driverName) : remItem.driverName;
+            const prev = existingMap[key];
+            const mergedSigs = (prev && prev.signatures) ? { ...prev.signatures } : {};
+
+            // 원격 sigMeta 반영
+            if (remItem.sigMeta) {
+              Object.keys(remItem.sigMeta).forEach(sId => {
+                if (remItem.sigMeta[sId] && remItem.sigMeta[sId].signed) {
+                  if (!mergedSigs[sId]) {
+                    mergedSigs[sId] = {
+                      signed: true,
+                      sigData: (prev && prev.sigData) || makeFallbackStampSvg(remItem.driverName || remItem.carNo),
+                      sigTime: remItem.sigMeta[sId].sigTime || ''
+                    };
+                  } else {
+                    mergedSigs[sId].signed = true;
+                    mergedSigs[sId].sigTime = remItem.sigMeta[sId].sigTime || mergedSigs[sId].sigTime;
+                  }
+                }
+              });
+            }
+
+            const isSignedTop = remItem.signed || (prev && prev.signed) || false;
+            return {
+              id: remItem.id,
+              carNo: remItem.carNo,
+              driverName: remItem.driverName,
+              role: remItem.role || (prev ? prev.role : ''),
+              cell: remItem.cell,
+              status: remItem.status,
+              signed: isSignedTop,
+              sigData: (prev && prev.sigData) ? prev.sigData : (isSignedTop ? makeFallbackStampSvg(remItem.driverName || remItem.carNo) : null),
+              sigTime: remItem.sigTime || (prev ? prev.sigTime : null),
+              signatures: mergedSigs
+            };
+          });
+          changed = true;
+        }
+      });
+
+      if (changed) {
+        saveState(false, false);
+        updateEduInfoDisplay();
+        renderAll();
+      }
+      return changed;
+    }
+
+    function makeFallbackStampSvg(nameText) {
+      const clean = nameText || '서명완료';
+      return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40"><text x="10" y="26" font-family="sans-serif" font-size="16" font-weight="bold" fill="%230f172a">' + encodeURIComponent(clean) + '</text></svg>';
+    }
+
+    // 원격에서 개별 참석자 서명 패킷 수신 시 즉시 반영! (기사님 폰 -> 관리자 폰 0.1초 직통!)
+    function applyRemoteSignaturePacket(pkt) {
+      if (!pkt || !pkt.groupKey || !pkt.personKey) return;
+      const g = appData.groups[pkt.groupKey];
+      if (!g) return;
+
+      // 만약 관리자 폰 또는 기사 폰에 아직 운전기사 배차표가 안 올라와 있는데 서명이 들어온 경우, 마스터 명단에서 찾아서 반영
+      if ((!g.roster || g.roster.length === 0) && pkt.groupKey === 'driver') {
+        g.roster = OFFICIAL_1111_DRIVERS_BACKUP.map(d => ({
+          ...d,
+          signed: false,
+          sigData: null,
+          sigTime: null
+        }));
+      }
+
+      const item = (g.roster || []).find(r => {
+        const k = (pkt.groupKey === 'driver') ? (r.carNo || r.driverName) : r.driverName;
+        return k === pkt.personKey || r.id === pkt.itemId || r.driverName === pkt.driverName;
+      });
+      if (!item) return;
+
+      const sessId = pkt.sessionId || getActiveSession().id;
+      if (pkt.action === 'delete') {
+        if (item.signatures && item.signatures[sessId]) {
+          delete item.signatures[sessId];
+        }
+        item.signed = false;
+        item.sigData = null;
+        item.sigTime = null;
+      } else {
+        if (!item.signatures) item.signatures = {};
+        item.signatures[sessId] = {
+          signed: true,
+          sigData: pkt.sigData || makeFallbackStampSvg(item.driverName || item.carNo),
+          sigTime: pkt.sigTime || ''
+        };
+        item.signed = true;
+        item.sigData = pkt.sigData || makeFallbackStampSvg(item.driverName || item.carNo);
+        item.sigTime = pkt.sigTime || '';
+      }
+
+      saveState(false, false);
+      renderAll();
+    }
+
+    // 서명 이미지를 가볍게 압축하여 무선 전송 속도를 극대화
+    function compressSignatureCanvas(srcCanvas) {
+      try {
+        const tmp = document.createElement('canvas');
+        tmp.width = 220;
+        tmp.height = 90;
+        const tctx = tmp.getContext('2d');
+        tctx.drawImage(srcCanvas, 0, 0, tmp.width, tmp.height);
+        return tmp.toDataURL('image/png');
+      } catch (e) {
+        return srcCanvas ? srcCanvas.toDataURL('image/png') : '';
+      }
+    }
+
+    // 클라우드(MQTT + Firebase)로 전체 상태 브로드캐스트 (관리자가 명단/인증코드/회차 변경 시)
+    function pushCloudState() {
+      const payload = buildLightweightStatePayload();
+      const jsonStr = JSON.stringify(payload);
+
+      if (mqttClient && mqttConnected) {
+        try {
+          mqttClient.publish(MQTT_TOPIC_STATE, jsonStr, { qos: 1, retain: true });
+        } catch (e) {
+          console.warn('MQTT publish state error:', e);
+        }
+      }
+
+      const fbUrl = getActiveFirebaseUrl();
+      if (fbUrl) {
+        fetch(`${fbUrl}/eduState.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: jsonStr
+        }).catch(() => {});
+      }
+    }
+
+    // 클라우드(MQTT + Firebase)로 개별 서명 즉시 전송 (기사님이 서명 완료 또는 관리자가 서명 삭제 시)
+    function pushCloudSignature(groupKey, item, sessionId, action = 'sign') {
+      if (!item) return;
+      const personKey = (groupKey === 'driver') ? (item.carNo || item.driverName) : item.driverName;
+      const sessSign = (item.signatures && item.signatures[sessionId]) || { signed: item.signed, sigData: item.sigData, sigTime: item.sigTime };
+
+      const pkt = {
+        sender: DEVICE_ID,
+        ts: Date.now(),
+        action: action,
+        groupKey: groupKey,
+        sessionId: sessionId,
+        itemId: item.id,
+        personKey: personKey,
+        carNo: item.carNo || '',
+        driverName: item.driverName || '',
+        sigData: action === 'delete' ? null : (sessSign.sigData || item.sigData),
+        sigTime: action === 'delete' ? null : (sessSign.sigTime || item.sigTime)
+      };
+
+      const safeKey = encodeURIComponent(personKey).replace(/%/g, '_');
+      const topic = `${MQTT_TOPIC_SIG_PREFIX}${sessionId}/${groupKey}/${safeKey}`;
+
+      if (mqttClient && mqttConnected) {
+        try {
+          // Retain=true 로 발행하여 나중에 접속하거나 새로고침하는 관리자 폰에서도 즉시 모든 서명이 수신됨!
+          mqttClient.publish(topic, JSON.stringify(pkt), { qos: 1, retain: true });
+        } catch (e) {
+          console.warn('MQTT sig publish error:', e);
+        }
+      }
+
+      const fbUrl = getActiveFirebaseUrl();
+      if (fbUrl) {
+        fetch(`${fbUrl}/eduSigs/${sessionId}/${groupKey}/${safeKey}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pkt)
+        }).catch(() => {});
+      }
+    }
+
+    function getActiveFirebaseUrl() {
+      const urlDb = (new URLSearchParams(window.location.search)).get('db');
+      if (urlDb && urlDb.startsWith('http')) {
+        return urlDb.replace(/\/+$/, '');
+      }
+      if (appData && appData.firebaseDbUrl && appData.firebaseDbUrl.startsWith('http')) {
+        return appData.firebaseDbUrl.replace(/\/+$/, '');
+      }
+      return '';
+    }
+
+    async function pullFirebaseData() {
+      const fbUrl = getActiveFirebaseUrl();
+      if (!fbUrl) return;
+      try {
+        const [stRes, sigRes] = await Promise.all([
+          fetch(`${fbUrl}/eduState.json`),
+          fetch(`${fbUrl}/eduSigs.json`)
+        ]);
+        if (stRes.ok) {
+          const stData = await stRes.json();
+          if (stData) applyRemoteStatePayload(stData);
+        }
+        if (sigRes.ok) {
+          const allSigs = await sigRes.json();
+          if (allSigs && typeof allSigs === 'object') {
+            Object.keys(allSigs).forEach(sId => {
+              const byGroup = allSigs[sId] || {};
+              Object.keys(byGroup).forEach(gKey => {
+                const byPerson = byGroup[gKey] || {};
+                Object.keys(byPerson).forEach(pKey => {
+                  const pkt = byPerson[pKey];
+                  if (pkt) applyRemoteSignaturePacket(pkt);
+                });
+              });
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Firebase pull error:', e);
+      }
+    }
+
+    function initMultiDeviceRealtimeSync() {
+      updateSyncBadgeUI('연결중', false);
+
+      // 1. Connect to public WebSocket MQTT broker over TLS (works on iOS Safari & Android Chrome seamlessly)
+      if (typeof mqtt !== 'undefined') {
+        const brokers = [
+          'wss://broker.emqx.io:8084/mqtt',
+          'wss://broker.hivemq.com:8884/mqtt'
+        ];
+        try {
+          mqttClient = mqtt.connect(brokers[0], {
+            clientId: 'wonjutc_' + DEVICE_ID,
+            clean: true,
+            connectTimeout: 5000,
+            reconnectPeriod: 3000
+          });
+
+          mqttClient.on('connect', () => {
+            mqttConnected = true;
+            updateSyncBadgeUI('실시간연동', true);
+            mqttClient.subscribe(MQTT_TOPIC_STATE, { qos: 1 });
+            mqttClient.subscribe(MQTT_TOPIC_SIG_PREFIX + '#', { qos: 1 });
+            mqttClient.subscribe(MQTT_TOPIC_CMD, { qos: 0 });
+
+            // 관리자 모드이고 이미 등록된 명단이 있다면 접속 즉시 최신 명단/인증코드를 브로드캐스트하여 기사님 폰들과 동기화!
+            if (currentMode === 'admin') {
+              pushCloudState();
+            }
+          });
+
+          mqttClient.on('message', (topic, message) => {
+            try {
+              const str = message.toString();
+              if (!str) return;
+              const data = JSON.parse(str);
+              if (data.sender === DEVICE_ID) return; // 본인이 보낸 메시지는 무시
+
+              if (topic === MQTT_TOPIC_STATE) {
+                applyRemoteStatePayload(data);
+              } else if (topic.startsWith(MQTT_TOPIC_SIG_PREFIX)) {
+                applyRemoteSignaturePacket(data);
+              } else if (topic === MQTT_TOPIC_CMD) {
+                if (data.cmd === 'REQUEST_SYNC' && currentMode === 'admin') {
+                  pushCloudState();
+                }
+              }
+            } catch (err) {
+              console.warn('MQTT message parse error:', err);
+            }
+          });
+
+          mqttClient.on('offline', () => {
+            mqttConnected = false;
+            updateSyncBadgeUI('재연결중', false);
+          });
+
+          mqttClient.on('error', () => {
+            mqttConnected = false;
+          });
+        } catch (err) {
+          console.warn('MQTT init error:', err);
+        }
+      }
+
+      // 2. Also pull from Firebase if configured
+      pullFirebaseData();
+    }
+
+    // ==================== MANUAL & REALTIME REFRESH ====================
+    async function refreshAllData() {
+      const icon = document.getElementById('refreshIcon');
+      if (icon) icon.classList.add('fa-spin');
+
+      // 1. 로컬 스토리지 확인
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.groups) {
+            appData = parsed;
+            lastSavedRawState = raw;
+          }
+        }
+      } catch (e) {
+        console.warn('refresh error:', e);
+      }
+
+      // 2. MQTT 브로커 재구독 (Retained 되어 있는 모든 다른 기기의 서명 패킷을 즉시 다시 당겨옴!)
+      if (mqttClient && mqttConnected) {
+        try {
+          mqttClient.unsubscribe(MQTT_TOPIC_SIG_PREFIX + '#', () => {
+            mqttClient.subscribe(MQTT_TOPIC_SIG_PREFIX + '#', { qos: 1 });
+          });
+          mqttClient.publish(MQTT_TOPIC_CMD, JSON.stringify({ sender: DEVICE_ID, cmd: 'REQUEST_SYNC', ts: Date.now() }));
+        } catch (e) {}
+      }
+
+      // 3. Firebase DB 풀링 (설정된 경우)
+      await pullFirebaseData();
+
+      updateEduInfoDisplay();
+      renderAll();
+
+      setTimeout(() => {
+        if (icon) icon.classList.remove('fa-spin');
+        const g = appData.groups[activeTargetGroup];
+        const activeSess = getActiveSession();
+        const signedCnt = (g.roster || []).filter(r => {
+          if (r.status !== 'work') return false;
+          if (r.signatures && r.signatures[activeSess.id] && r.signatures[activeSess.id].signed) return true;
+          if (activeSess.id === 'sess-1' && r.signed) return true;
+          return false;
+        }).length;
+        showToast(`🔄 실시간 동기화 완료! (현재 서명완료: ${signedCnt}${g.unit})`);
+      }, 400);
+    }
+
+    function saveState(broadcast = true, pushCloud = true) {
+      try {
+        const raw = JSON.stringify(appData);
+        localStorage.setItem(STORAGE_KEY, raw);
+        lastSavedRawState = raw;
+        if (broadcast && syncChannel) {
+          syncChannel.postMessage({ type: 'DATA_UPDATED', timestamp: Date.now() });
+        }
+        if (pushCloud) {
+          pushCloudState();
+        }
+      } catch (e) {
+        console.warn('localStorage save error:', e);
+      }
+    }
+
+    function reloadFromStorage() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw || raw === lastSavedRawState) return;
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.groups) {
+          appData = parsed;
+          lastSavedRawState = raw;
+          updateEduInfoDisplay();
+          renderAll();
+        }
+      } catch (err) {
+        console.warn('reloadFromStorage error:', err);
+      }
+    }
+
+    // View State
+    let currentMode = appData.currentMode || 'admin';
+    let activeTargetGroup = 'driver';
+    let activeStatusFilter = 'work';
+    let activeCellFilter = 'all';
+    let searchQuery = '';
+    let currentSigningItem = null;
+    let uploadTargetGroup = 'driver';
+    let parsedUploadItems = null;
+
+    // ==================== URL PARAMETERS & SYNCHRONIZATION ====================
+    const urlParams = new URLSearchParams(window.location.search);
+    const modeParam = urlParams.get('mode');
+    const authParam = urlParams.get('auth') || urlParams.get('pin');
+    const groupParam = urlParams.get('group');
+
+    if (modeParam === 'admin') {
+      currentMode = 'admin';
+    } else if (modeParam === 'worker' || modeParam === 'driver') {
+      currentMode = 'worker';
+    } else {
+      currentMode = 'worker';
+    }
+
+    if (authParam) {
+      const cleanPin = String(authParam).trim();
+      if (cleanPin.length === 4 && !isNaN(cleanPin)) {
+        appData.authCode = cleanPin;
+        saveState();
+      }
+    }
+
+    if (groupParam && appData.groups[groupParam]) {
+      activeTargetGroup = groupParam;
+    }
+
+    // ==================== REALTIME CROSS-TAB & MULTI-VIEW LISTENERS ====================
+    if (syncChannel) {
+      syncChannel.onmessage = (event) => {
+        if (event.data && event.data.type === 'DATA_UPDATED') {
+          reloadFromStorage();
+        }
+      };
+    }
+
+    window.addEventListener('storage', (e) => {
+      if (e.key === STORAGE_KEY && e.newValue) {
+        reloadFromStorage();
+      }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        reloadFromStorage();
+      }
+    });
+    window.addEventListener('focus', reloadFromStorage);
+
+    setInterval(() => {
+      const currentRaw = localStorage.getItem(STORAGE_KEY) || '';
+      if (currentRaw && currentRaw !== lastSavedRawState) {
+        reloadFromStorage();
+      }
+    }, 1500);
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const adminInp = document.getElementById('adminAuthInput');
+      if (adminInp) {
+        adminInp.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') verifyAdminAuth();
+        });
+      }
+
+      const tSelect = document.getElementById('targetGroupSelect');
+      if (tSelect) tSelect.value = activeTargetGroup;
+
+      const hCode = document.getElementById('headerAuthCodeVal');
+      if (hCode) hCode.textContent = appData.authCode || '7429';
+
+      updateTopNav();
+      updateModeViews();
+      updateEduInfoDisplay();
+      renderAll();
+      initCanvas();
+      initMultiDeviceRealtimeSync();
+    });
+
+    // ==================== TOP NAVIGATION & MODE SWITCHING ====================
+    function updateTopNav() {
+      const topNav = document.getElementById('topNavContent');
+      if (currentMode === 'admin') {
+        topNav.innerHTML = `
+          <button type="button" class="py-1.5 px-3 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-default">
+            <i class="fa-solid fa-user-gear text-xs"></i>
+            <span>관리자 모드 실행 중</span>
+          </button>
+          <button type="button" onclick="switchAppMode('worker')" class="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center gap-1.5 shadow-xs transition-all">
+            <i class="fa-solid fa-truck text-xs"></i>
+            <span>현장 서명용 화면 전환</span>
+          </button>
+        `;
+      } else {
+        topNav.innerHTML = `
+          <button type="button" onclick="switchAppMode('admin')" class="py-1.5 px-3 rounded-xl bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-1.5 hover:bg-slate-700 transition-all shadow-xs">
+            <i class="fa-solid fa-user-gear text-xs text-slate-400"></i>
+            <span>관리자모드 전환 (PIN)</span>
+          </button>
+          <div class="py-1.5 px-3 rounded-xl bg-emerald-600 text-white font-black text-xs flex items-center gap-1.5 shadow-xs">
+            <span>현장 서명용 화면 실행 중</span>
+          </div>
+        `;
+      }
+    }
+
+    function switchAppMode(targetMode) {
+      if (targetMode === 'admin') {
+        if (currentMode === 'admin') return;
+        document.getElementById('adminAuthInput').value = '';
+        document.getElementById('adminAuthModal').classList.remove('hidden');
+        setTimeout(() => {
+          const inp = document.getElementById('adminAuthInput');
+          if (inp) inp.focus();
+        }, 100);
+      } else {
+        currentMode = 'worker';
+        appData.currentMode = 'worker';
+        saveState();
+        updateTopNav();
+        updateModeViews();
+        renderAll();
+        showToast('현장 서명용 화면으로 전환되었습니다.');
+      }
+    }
+
+    function closeAdminAuthModal() {
+      document.getElementById('adminAuthModal').classList.add('hidden');
+    }
+
+    function verifyAdminAuth() {
+      const pin = document.getElementById('adminAuthInput').value.trim();
+      const expected = String(appData.adminPin || '0000').trim();
+      if (pin === expected || pin === '0000') {
+        currentMode = 'admin';
+        appData.currentMode = 'admin';
+        saveState();
+        closeAdminAuthModal();
+        updateTopNav();
+        updateModeViews();
+        renderAll();
+        showToast('관리자 모드로 전환되었습니다.');
+      } else {
+        showToast('관리자 비밀번호가 일치하지 않습니다.');
+        const inp = document.getElementById('adminAuthInput');
+        if (inp) {
+          inp.value = '';
+          inp.focus();
+        }
+      }
+    }
+
+    function updateModeViews() {
+      const adminActionsRow = document.getElementById('adminActionsRow');
+      const adminRichBlueCard = document.getElementById('adminRichBlueCard');
+      const greenNoticeBox = document.getElementById('greenNoticeBox');
+      const headerAuthBadge = document.getElementById('headerAuthBadgeWrapper');
+      const sessionAdminButtons = document.getElementById('sessionAdminButtons');
+      const mainHeaderTitle = document.getElementById('mainHeaderTitle');
+      const mainHeaderIconBox = document.getElementById('mainHeaderIconBox');
+
+      if (currentMode === 'admin') {
+        adminActionsRow.classList.remove('hidden');
+        adminRichBlueCard.classList.remove('hidden');
+        greenNoticeBox.classList.add('hidden');
+        headerAuthBadge.classList.remove('hidden');
+        sessionAdminButtons.classList.remove('hidden');
+        mainHeaderTitle.innerHTML = '교육 완료 서명 <span class="text-[9px] text-blue-700 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded font-bold ml-1">관리자</span>';
+        mainHeaderIconBox.className = 'w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0';
+      } else {
+        adminActionsRow.classList.add('hidden');
+        adminRichBlueCard.classList.add('hidden');
+        greenNoticeBox.classList.remove('hidden');
+        headerAuthBadge.classList.add('hidden');
+        sessionAdminButtons.classList.add('hidden');
+        mainHeaderTitle.innerHTML = '교육 완료 서명 <span class="text-[9px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded font-bold ml-1">서명용</span>';
+        mainHeaderIconBox.className = 'w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0';
+      }
+
+      updateGreenNoticeContent();
+    }
+
+    function updateGreenNoticeContent() {
+      const isDriver = activeTargetGroup === 'driver';
+      const isStaff = activeTargetGroup === 'staff';
+      const titleEl = document.getElementById('greenNoticeTitle');
+      const iconEl = document.getElementById('greenNoticeIcon');
+      const item1 = document.getElementById('greenNoticeItem1');
+      const item2 = document.getElementById('greenNoticeItem2');
+      const item3 = document.getElementById('greenNoticeItem3');
+
+      if (isDriver) {
+        titleEl.textContent = '설치기사 현장 서명 화면 (수정 권한 제한됨)';
+        iconEl.className = 'fa-solid fa-truck';
+        item1.innerHTML = '본인 <strong class="text-slate-900 font-black">차량번호 뒷자리(예: 6321)</strong>를 검색하여 서명해주세요.';
+        item2.innerHTML = '<strong class="text-slate-900 font-black">휴무 차량</strong>은 서명 대상에서 자동 제외됩니다.';
+        item3.innerHTML = '<strong class="text-red-600 font-black">1대의 휴대폰으로는 본인 차량 1회만 서명</strong>할 수 있으며, 타인 대리 서명은 불가합니다.';
+      } else if (isStaff) {
+        titleEl.textContent = '운영스탭 현장 서명 화면 (수정 권한 제한됨)';
+        iconEl.className = 'fa-solid fa-user-tie';
+        item1.innerHTML = '본인 <strong class="text-slate-900 font-black">성명(이름)</strong>을 검색하여 서명해주세요.';
+        item2.innerHTML = '<strong class="text-slate-900 font-black">휴무 대상자</strong>는 서명 대상에서 자동 제외됩니다.';
+        item3.innerHTML = '<strong class="text-red-600 font-black">1대의 휴대폰으로는 본인 1회만 서명</strong>할 수 있으며, 타인 대리 서명은 불가합니다.';
+      } else {
+        titleEl.textContent = '보관하역 현장 서명 화면 (수정 권한 제한됨)';
+        iconEl.className = 'fa-solid fa-boxes-stacked';
+        item1.innerHTML = '본인 <strong class="text-slate-900 font-black">성명(이름)</strong>을 검색하여 서명해주세요.';
+        item2.innerHTML = '<strong class="text-slate-900 font-black">휴무 대상자</strong>는 서명 대상에서 자동 제외됩니다.';
+        item3.innerHTML = '<strong class="text-red-600 font-black">1대의 휴대폰으로는 본인 1회만 서명</strong>할 수 있으며, 타인 대리 서명은 불가합니다.';
+      }
+    }
+
+    // ==================== MULTI-SESSION MANAGEMENT ENGINE ====================
+    function getActiveSession() {
+      if (!appData.sessions || appData.sessions.length === 0) {
+        appData.sessions = [
+          {
+            id: 'sess-1',
+            title: '1차: 정기 안전보건교육',
+            date: '2026-11-11',
+            place: '원주TC / 2층교육장',
+            instructor: '안전관리팀'
+          }
+        ];
+        appData.activeSessionId = 'sess-1';
+      }
+      let current = appData.sessions.find(s => s.id === appData.activeSessionId);
+      if (!current) {
+        current = appData.sessions[0];
+        appData.activeSessionId = current.id;
+      }
+      return current;
+    }
+
+    function selectSession(sessionId) {
+      const sess = appData.sessions.find(s => s.id === sessionId);
+      if (!sess) return;
+      appData.activeSessionId = sessionId;
+      saveState();
+      updateEduInfoDisplay();
+      renderAll();
+      showToast(`${sess.title} 회차로 전환되었습니다.`);
+    }
+
+    function renderSessionPills() {
+      const container = document.getElementById('sessionPillsContainer');
+      if (!container) return;
+
+      const activeSess = getActiveSession();
+      const groupData = appData.groups[activeTargetGroup];
+      const roster = groupData.roster;
+      const workCount = roster.filter(r => r.status === 'work').length;
+      const unit = groupData.unit;
+
+      let html = '';
+      appData.sessions.forEach(sess => {
+        const isActive = sess.id === activeSess.id;
+        const signedCount = roster.filter(r => {
+          if (r.status !== 'work') return false;
+          if (r.signatures && r.signatures[sess.id] && r.signatures[sess.id].signed) return true;
+          if (sess.id === 'sess-1' && r.signed) return true;
+          return false;
+        }).length;
+
+        if (isActive) {
+          html += `
+            <button type="button" onclick="selectSession('${sess.id}')" class="py-1.5 px-3 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center gap-2 shadow-xs shrink-0 cursor-pointer">
+              <span class="w-2 h-2 rounded-full bg-white shrink-0"></span>
+              <span class="truncate">${sess.title}</span>
+              <span class="text-[10px] bg-white/20 px-1.5 py-0.2 rounded-md font-mono">${signedCount}/${workCount}${unit}</span>
+            </button>
+          `;
+        } else {
+          html += `
+            <button type="button" onclick="selectSession('${sess.id}')" class="py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-2 border border-slate-200 shrink-0 cursor-pointer transition-colors">
+              <span class="w-2 h-2 rounded-full bg-slate-300 shrink-0"></span>
+              <span class="truncate">${sess.title}</span>
+              <span class="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded-md font-mono">${signedCount}/${workCount}${unit}</span>
+            </button>
+          `;
+        }
+      });
+
+      container.innerHTML = html;
+    }
+
+    function openAddSessionModal() {
+      const nextNum = (appData.sessions ? appData.sessions.length : 1) + 1;
+      document.getElementById('newSessionTitle').value = `${nextNum}차`;
+      document.getElementById('newSessionDate').value = '2026-11-11';
+      document.getElementById('newSessionPlace').value = '원주TC / 2층교육장';
+      document.getElementById('newSessionInstructor').value = '안전관리팀';
+      document.getElementById('addSessionModal').classList.remove('hidden');
+    }
+
+    function closeAddSessionModal() {
+      document.getElementById('addSessionModal').classList.add('hidden');
+    }
+
+    function saveNewSession() {
+      const title = document.getElementById('newSessionTitle').value.trim() || '새 교육 회차';
+      const date = document.getElementById('newSessionDate').value || '2026-11-11';
+      const place = document.getElementById('newSessionPlace').value.trim() || '원주TC / 2층교육장';
+      const instructor = document.getElementById('newSessionInstructor').value.trim() || '안전관리팀';
+
+      if (!appData.sessions) appData.sessions = [];
+      const newId = 'sess-' + Date.now();
+      const newSession = {
+        id: newId,
+        title: title,
+        date: date,
+        place: place,
+        instructor: instructor
+      };
+
+      appData.sessions.push(newSession);
+      appData.activeSessionId = newId;
+      saveState();
+
+      closeAddSessionModal();
+      updateEduInfoDisplay();
+      renderAll();
+      showToast(`새 교육 회차 [${title}] 가 추가되었습니다.`);
+    }
+
+    function deleteCurrentSession() {
+      if (!appData.sessions || appData.sessions.length <= 1) {
+        showToast('최소 1개 이상의 교육 회차가 유지되어야 합니다.');
+        return;
+      }
+
+      const activeSess = getActiveSession();
+      const idx = appData.sessions.findIndex(s => s.id === activeSess.id);
+      if (idx !== -1) {
+        const deletedTitle = appData.sessions[idx].title;
+        appData.sessions.splice(idx, 1);
+        appData.activeSessionId = appData.sessions[0].id;
+        saveState();
+        updateEduInfoDisplay();
+        renderAll();
+        showToast(`[${deletedTitle}] 회차가 삭제되었습니다.`);
+      }
+    }
+
+    function updateEduInfoDisplay() {
+      const sess = getActiveSession();
+      const datePlace = document.getElementById('sessionDatePlaceDisplay');
+      if (datePlace) datePlace.textContent = `${sess.date} | ${sess.place}`;
+
+      const blueTitle = document.getElementById('blueCardTitle');
+      if (blueTitle) blueTitle.textContent = sess.title;
+
+      const blueSub = document.getElementById('blueCardSubtitle');
+      if (blueSub) blueSub.textContent = `교육일자: ${sess.date} | 장소: ${sess.place} | 강사: ${sess.instructor}`;
+
+      const headerSub = document.getElementById('mainHeaderSubtitle');
+      if (headerSub) {
+        headerSub.textContent = `원주TC · ${sess.title}`;
+      }
+    }
+
+    function changeAuthCode() {
+      const next = String(Math.floor(1000 + Math.random() * 9000));
+      appData.authCode = next;
+      saveState();
+
+      const hVal = document.getElementById('headerAuthCodeVal');
+      if (hVal) hVal.textContent = next;
+
+      const modalCode = document.getElementById('qrModalAuthCode');
+      if (modalCode) modalCode.textContent = next;
+
+      renderQrContent();
+
+      showToast('현장 인증코드가 [' + next + ']로 즉시 변경되었습니다.');
+    }
+
+    // ==================== RENDER PIPELINE ====================
+    function renderAll() {
+      const groupData = appData.groups[activeTargetGroup];
+      const isDriver = activeTargetGroup === 'driver';
+      const unit = groupData.unit;
+      const workTerm = groupData.workTerm;
+
+      document.getElementById('topUploadBtnText').textContent = isDriver ? '가동/휴무' : '근무/휴무';
+
+      const roster = groupData.roster;
+      const totalCount = roster.length;
+      const workCount = roster.filter(r => r.status === 'work').length;
+      const offCount = roster.filter(r => r.status === 'off').length;
+      const activeSess = getActiveSession();
+      const signedCount = roster.filter(r => {
+        if (r.status !== 'work') return false;
+        if (r.signatures && r.signatures[activeSess.id] && r.signatures[activeSess.id].signed) return true;
+        if (activeSess.id === 'sess-1' && r.signed) return true;
+        return false;
+      }).length;
+      const unsignedCount = roster.filter(r => r.status === 'work' && !r.signed).length;
+      const percent = workCount > 0 ? Math.round((signedCount / workCount) * 100) : 0;
+
+      document.getElementById('targetGroupSelect').value = activeTargetGroup;
+      if (totalCount === 0) {
+        document.getElementById('currentGroupBadge').textContent = `${groupData.name}: 명단 미등록 (업로드 필요)`;
+      } else {
+        document.getElementById('currentGroupBadge').textContent = 
+          `${groupData.name}: 총 ${totalCount}${unit} (${workTerm} ${workCount}${unit})`;
+      }
+
+      document.getElementById('blueCardKpi1Label').textContent = isDriver ? '총 등록' : '총원';
+      document.getElementById('blueCardKpi1Val').textContent = `${totalCount}${unit}`;
+      document.getElementById('blueCardKpi2Label').textContent = isDriver ? '가동대상' : '근무대상';
+      document.getElementById('blueCardKpi2Val').textContent = `${workCount}${unit}`;
+      document.getElementById('blueCardKpi3Label').textContent = isDriver ? '당일휴무' : '휴무자';
+      document.getElementById('blueCardKpi3Val').textContent = `${offCount}${unit}`;
+      document.getElementById('blueCardKpi4Val').textContent = `${signedCount}${unit}`;
+
+      document.getElementById('blueCardProgressLabel').textContent = `${workTerm} 대상자 서명 진행률 (미서명: ${unsignedCount}${unit})`;
+      document.getElementById('blueCardProgressPercent').textContent = `${percent}%`;
+      document.getElementById('blueCardProgressBar').style.width = `${percent}%`;
+
+      const searchInput = document.getElementById('searchInput');
+      searchInput.placeholder = isDriver 
+        ? '차량번호 뒷자리(예: 6321) 또는 기사명, 소속 검색' 
+        : '성명 또는 소속 검색';
+
+      document.getElementById('statusWorkTabLabel').textContent = workTerm;
+      document.getElementById('countAll').textContent = totalCount;
+      document.getElementById('countWork').textContent = workCount;
+      document.getElementById('countOff').textContent = offCount;
+      document.getElementById('countUnsigned').textContent = unsignedCount;
+      document.getElementById('countSigned').textContent = signedCount;
+
+      updateStatusTabButtons();
+      renderCellFilters();
+      renderCardsGrid();
+      updateUploadGroupCounters();
+      renderSessionPills();
+    }
+
+    function updateUploadGroupCounters() {
+      ['driver', 'staff', 'warehouse_day', 'warehouse_night'].forEach(k => {
+        const el = document.getElementById(`uploadGroupCount_${k}`);
+        if (el && appData.groups[k]) {
+          const g = appData.groups[k];
+          el.textContent = `${g.roster.length}${g.unit}`;
+        }
+      });
+    }
+
+    function updateStatusTabButtons() {
+      const buttons = document.querySelectorAll('.status-btn');
+      buttons.forEach(btn => {
+        const s = btn.getAttribute('data-status');
+        if (s === activeStatusFilter) {
+          btn.className = 'status-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all bg-blue-600 text-white shadow-xs shrink-0';
+        } else {
+          btn.className = 'status-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all bg-slate-100 text-slate-600 shrink-0';
+        }
+      });
+    }
+
+    function renderCellFilters() {
+      const container = document.getElementById('cellFilterContainer');
+      if (!container) return;
+      // 보관하역(주간/야간) 및 운영스탭은 불필요한 이중 소속 탭을 숨겨 깔끔하게 표시
+      if (activeTargetGroup !== 'driver') {
+        container.innerHTML = '';
+        return;
+      }
+      const groupData = appData.groups[activeTargetGroup];
+      const roster = groupData.roster;
+
+      const teamMap = {};
+      roster.forEach(r => {
+        const c = r.cell || '기본소속';
+        teamMap[c] = (teamMap[c] || 0) + 1;
+      });
+
+      let html = `
+        <button type="button" onclick="setCellFilter('all')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all ${
+          activeCellFilter === 'all' 
+            ? 'bg-slate-900 text-white' 
+            : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+        }">
+          전체 (${roster.length})
+        </button>
+      `;
+
+      Object.keys(teamMap).forEach(team => {
+        const isSelected = activeCellFilter === team;
+        html += `
+          <button type="button" onclick="setCellFilter('${team}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all ${
+            isSelected 
+              ? 'bg-indigo-600 text-white shadow-xs' 
+              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }">
+            ${team} (${teamMap[team]})
+          </button>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    // ==================== JOB GROUP (직군: 가전 vs 에어컨) CLASSIFIER ====================
+    function getItemJobGroup(item) {
+      if (activeTargetGroup !== 'driver') {
+        return (appData.groups[activeTargetGroup] && appData.groups[activeTargetGroup].name) || '기타';
+      }
+      if (!item) return '가전';
+      const cellRaw = (item.cell || '').replace(/\s+/g, '').toUpperCase();
+
+      const acList = ['원주AC', '여주AC', '충주AC', '제천AC', '춘천AC', '홍천AC'];
+      const isAc = acList.some(ac => cellRaw.includes(ac));
+      if (isAc) {
+        return '에어컨';
+      }
+
+      if (cellRaw.includes('에어컨지원')) {
+        return '가전';
+      }
+
+      return '가전';
+    }
+
+    function getRosterJobTitle(roster) {
+      if (activeTargetGroup !== 'driver') {
+        return (appData.groups[activeTargetGroup] && appData.groups[activeTargetGroup].name) || '기타';
+      }
+      if (!roster || roster.length === 0) return '가전';
+
+      const groups = new Set(roster.map(getItemJobGroup));
+      if (groups.has('가전') && groups.has('에어컨')) {
+        return '가전 / 에어컨';
+      } else if (groups.has('에어컨')) {
+        return '에어컨';
+      } else {
+        return '가전';
+      }
+    }
+
+    function renderCardsGrid() {
+      const container = document.getElementById('cardsContainer');
+      const emptyState = document.getElementById('emptyState');
+      const groupData = appData.groups[activeTargetGroup];
+      const roster = groupData.roster;
+      const isDriver = activeTargetGroup === 'driver';
+      const unit = groupData.unit;
+      const workTerm = groupData.workTerm;
+      const isAdmin = currentMode === 'admin';
+      const activeSess = getActiveSession();
+
+      const filtered = roster.filter(item => {
+        if (activeStatusFilter === 'work' && item.status !== 'work') return false;
+        if (activeStatusFilter === 'off' && item.status !== 'off') return false;
+        const sessSign = (item.signatures && item.signatures[activeSess.id]) || (activeSess.id === 'sess-1' ? { signed: item.signed, sigData: item.sigData, sigTime: item.sigTime } : { signed: false });
+        if (activeStatusFilter === 'signed' && !sessSign.signed) return false;
+        if (activeStatusFilter === 'unsigned' && (item.status !== 'work' || sessSign.signed)) return false;
+
+        if (activeCellFilter !== 'all' && item.cell !== activeCellFilter) return false;
+
+        if (searchQuery.trim()) {
+          const q = searchQuery.trim().toLowerCase();
+          const matchName = item.driverName && item.driverName.toLowerCase().includes(q);
+          const matchCar = item.carNo && item.carNo.toLowerCase().includes(q);
+          const matchCell = item.cell && item.cell.toLowerCase().includes(q);
+          if (!matchName && !matchCar && !matchCell) return false;
+        }
+
+        return true;
+      });
+
+      document.getElementById('filteredCountText').textContent = `${filtered.length}${unit}`;
+
+      if (roster.length === 0) {
+        if (isAdmin) {
+          container.innerHTML = `
+            <div class="bg-white rounded-2xl p-6 border-2 border-dashed border-slate-300 text-center space-y-3">
+              <div class="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto text-lg">
+                <i class="fa-solid fa-file-arrow-up"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-black text-slate-800">[${groupData.name}] 등록된 명단이 없습니다</h3>
+                <p class="text-xs text-slate-500 mt-1">상단 [가동/휴무] 또는 아래 버튼을 눌러 당일 명단 파일(엑셀/사진)을 첨부하여 명단을 등록해주세요.</p>
+              </div>
+              <button type="button" onclick="openUploadModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs">
+                <i class="fa-solid fa-cloud-arrow-up mr-1"></i> 당일 ${groupData.name} 명단 첨부 및 업데이트
+              </button>
+            </div>
+          `;
+        } else {
+          container.innerHTML = `
+            <div class="bg-white rounded-2xl p-6 border border-slate-200 text-center space-y-2.5">
+              <div class="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto text-lg">
+                <i class="fa-solid fa-user-clock"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-black text-slate-800">[${groupData.name}] 교육 명단 준비 중입니다</h3>
+                <p class="text-xs text-slate-500 mt-1 leading-relaxed">
+                  관리자가 당일 명단을 등록하면 이곳에 서명 카드가 표시됩니다.<br>잠시만 대기해주시기 바랍니다.
+                </p>
+              </div>
+            </div>
+          `;
+        }
+        emptyState.classList.add('hidden');
+        return;
+      }
+      if (filtered.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+      emptyState.classList.add('hidden');
+
+      let html = '';
+      filtered.forEach((item, idx) => {
+        const isWork = item.status === 'work';
+        const sessSign = (item.signatures && item.signatures[activeSess.id]) || (activeSess.id === 'sess-1' ? { signed: item.signed, sigData: item.sigData, sigTime: item.sigTime } : { signed: false });
+        const isSigned = sessSign.signed;
+        const currentSigData = sessSign.sigData;
+        const currentSigTime = sessSign.sigTime;
+
+        let statusBadge = '';
+        if (!isWork) {
+          statusBadge = `<span class="text-[11px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full"><i class="fa-solid fa-bed mr-1"></i>휴무</span>`;
+        } else if (isSigned) {
+          statusBadge = `<span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full"><i class="fa-solid fa-circle-check mr-1"></i>서명완료</span>`;
+        } else {
+          statusBadge = `<span class="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full flex items-center gap-1"><i class="fa-regular fa-clock"></i>${workTerm} (서명대기)</span>`;
+        }
+
+        const toggleBtnHtml = isAdmin ? `
+          <button type="button" onclick="toggleStatus('${item.id}')" class="text-[11px] text-slate-400 hover:text-slate-600 underline shrink-0">
+            ${isWork ? '휴무지정' : `${workTerm}전환`}
+          </button>
+        ` : '';
+
+        let titleContent = '';
+        if (isDriver) {
+          titleContent = `
+            <div class="flex items-baseline justify-between mb-2">
+              <div>
+                <h3 class="text-xl font-black text-slate-900 tracking-tight leading-snug">${item.carNo}</h3>
+                <p class="text-sm font-black text-slate-800 mt-0.5">${item.driverName}</p>
+              </div>
+              ${toggleBtnHtml}
+            </div>
+          `;
+        } else {
+          const roleDisplay = (activeTargetGroup === 'staff' && item.role) ? `<span class="text-xs font-black text-blue-700 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full ml-1.5">${item.role}</span>` : '';
+          titleContent = `
+            <div class="flex items-baseline justify-between mb-2">
+              <div class="flex items-center">
+                <h3 class="text-2xl font-black text-slate-900 tracking-tight leading-snug">${item.driverName}</h3>
+                ${roleDisplay}
+              </div>
+              ${toggleBtnHtml}
+            </div>
+          `;
+        }
+
+        let bottomAction = '';
+        if (!isWork) {
+          bottomAction = `
+            <div class="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-center text-[11px] text-slate-400 font-medium">
+              당일 휴무 대상입니다
+            </div>
+          `;
+        } else if (isSigned) {
+          const actionButtons = isAdmin ? `
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button type="button" onclick="deleteSignature('${item.id}')" class="text-[11px] text-red-600 font-bold hover:bg-red-50 px-2 py-1 rounded-lg border border-red-200 transition-colors">
+                서명삭제
+              </button>
+              <button type="button" onclick="openSignatureModal('${item.id}')" class="text-[11px] text-emerald-700 font-bold hover:bg-emerald-100/60 px-2 py-1 rounded-lg border border-emerald-200 transition-colors">
+                재서명
+              </button>
+            </div>
+          ` : `
+            <button type="button" onclick="openSignatureModal('${item.id}')" class="text-[11px] text-emerald-700 font-bold hover:bg-emerald-100/60 px-2.5 py-1 rounded-lg border border-emerald-200 shrink-0">
+              재서명
+            </button>
+          `;
+
+          bottomAction = `
+            <div class="bg-emerald-50/70 border border-emerald-200 rounded-xl p-2 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-12 h-7 bg-white rounded border border-emerald-200 overflow-hidden flex items-center justify-center p-0.5">
+                  <img src="${currentSigData}" alt="서명" class="max-h-full max-w-full object-contain">
+                </div>
+                <div class="text-[10px] text-emerald-800">
+                  <p class="font-bold">서명 완료</p>
+                  <p class="text-[9px] text-emerald-600 font-mono">${currentSigTime || '2026-11-11'}</p>
+                </div>
+              </div>
+              ${actionButtons}
+            </div>
+          `;
+        } else {
+          bottomAction = `
+            <button type="button" onclick="openSignatureModal('${item.id}')" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-signature"></i> 서명하기
+            </button>
+          `;
+        }
+
+        html += `
+          <div class="bg-white rounded-2xl p-3.5 border border-slate-200/90 border-l-4 border-l-amber-400 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[10px] font-black ${isDriver && getItemJobGroup(item) === '에어컨' ? 'text-cyan-800 bg-cyan-50 border border-cyan-200' : 'text-blue-800 bg-blue-50 border border-blue-200'} px-1.5 py-0.5 rounded">${isDriver ? getItemJobGroup(item) : (activeTargetGroup === 'staff' ? (item.role || '스탭') : (activeTargetGroup === 'warehouse_day' ? '보관(주간)' : '보관(야간)'))}</span>
+                  ${isDriver ? `<span class="text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">${item.cell}</span>` : ((activeTargetGroup === 'staff' && item.cell === '임원진') ? `<span class="text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">임원진</span>` : '')}
+                  <span class="text-[11px] font-semibold text-slate-400">NO.${idx + 1}</span>
+                </div>
+                ${statusBadge}
+              </div>
+              ${titleContent}
+            </div>
+            <div class="mt-1.5 pt-2 border-t border-slate-100">
+              ${bottomAction}
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    // ==================== INTERACTION HANDLERS ====================
+    function handleTargetGroupChange(newGroup) {
+      activeTargetGroup = newGroup;
+      activeCellFilter = 'all';
+      updateModeViews();
+      renderAll();
+      showToast(`${appData.groups[newGroup].name} 명단으로 전환되었습니다.`);
+    }
+
+    function setStatusFilter(filter) {
+      activeStatusFilter = filter;
+      renderAll();
+    }
+
+    function setCellFilter(cell) {
+      activeCellFilter = cell;
+      renderAll();
+    }
+
+    function handleSearch(val) {
+      searchQuery = val;
+      const clearBtn = document.getElementById('searchClearBtn');
+      if (val.trim()) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+      renderCardsGrid();
+    }
+
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      searchQuery = '';
+      document.getElementById('searchClearBtn').classList.add('hidden');
+      renderCardsGrid();
+    }
+
+    function resetAllFilters() {
+      activeStatusFilter = 'all';
+      activeCellFilter = 'all';
+      clearSearch();
+      renderAll();
+    }
+
+    function toggleStatus(itemId) {
+      const groupData = appData.groups[activeTargetGroup];
+      const item = groupData.roster.find(r => r.id === itemId);
+      if (!item) return;
+
+      const isWorkTerm = groupData.workTerm;
+      if (item.status === 'work') {
+        item.status = 'off';
+        showToast(`${item.driverName || item.carNo}님이 휴무로 지정되었습니다.`);
+      } else {
+        item.status = 'work';
+        showToast(`${item.driverName || item.carNo}님이 ${isWorkTerm}으로 전환되었습니다.`);
+      }
+      saveState();
+      renderAll();
+    }
+
+    // ==================== SIGNATURE PAD LOGIC ====================
+    let canvas, ctx;
+    let isDrawing = false;
+    let hasDrawn = false;
+
+    function resizeCanvas() {
+      canvas = document.getElementById('signatureCanvas');
+      if (!canvas) return;
+      ctx = canvas.getContext('2d');
+
+      const container = canvas.parentElement;
+      const rect = container.getBoundingClientRect();
+      const width = Math.floor(rect.width > 20 ? rect.width : 340);
+      const height = Math.floor(rect.height > 20 ? rect.height : 160);
+
+      canvas.width = width * 2;
+      canvas.height = height * 2;
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(2, 2);
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#0f172a';
+    }
+
+    function initCanvas() {
+      canvas = document.getElementById('signatureCanvas');
+      if (!canvas) return;
+      ctx = canvas.getContext('2d');
+
+      function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+        const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+        return {
+          x: clientX - rect.left,
+          y: clientY - rect.top
+        };
+      }
+
+      function startDraw(e) {
+        e.preventDefault();
+        isDrawing = true;
+        hasDrawn = true;
+        const placeholder = document.getElementById('canvasPlaceholder');
+        if (placeholder) placeholder.classList.add('hidden');
+        const pos = getPos(e);
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+      }
+
+      function draw(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
+        hasDrawn = true;
+        const pos = getPos(e);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+      }
+
+      function endDraw(e) {
+        if (!isDrawing) return;
+        isDrawing = false;
+        ctx.closePath();
+      }
+
+      canvas.addEventListener('pointerdown', startDraw);
+      canvas.addEventListener('pointermove', draw);
+      canvas.addEventListener('pointerup', endDraw);
+      canvas.addEventListener('pointercancel', endDraw);
+
+      canvas.addEventListener('touchstart', startDraw, { passive: false });
+      canvas.addEventListener('touchmove', draw, { passive: false });
+      canvas.addEventListener('touchend', endDraw, { passive: false });
+
+      canvas.addEventListener('mousedown', startDraw);
+      canvas.addEventListener('mousemove', draw);
+      canvas.addEventListener('mouseup', endDraw);
+      canvas.addEventListener('mouseleave', endDraw);
+    }
+
+    function clearSignatureCanvas() {
+      if (!canvas) canvas = document.getElementById('signatureCanvas');
+      if (!canvas) return;
+      ctx = canvas.getContext('2d');
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.scale(2, 2);
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#0f172a';
+      hasDrawn = false;
+      const placeholder = document.getElementById('canvasPlaceholder');
+      if (placeholder) placeholder.classList.remove('hidden');
+    }
+
+    function openSignatureModal(itemId) {
+      const groupData = appData.groups[activeTargetGroup];
+      const item = groupData.roster.find(r => r.id === itemId);
+      if (!item) return;
+
+      currentSigningItem = item;
+      document.getElementById('sigModalGroupTag').textContent = `${groupData.name} 서명`;
+      document.getElementById('sigModalPersonName').textContent = 
+        activeTargetGroup === 'driver' 
+          ? `${item.driverName} (${item.carNo})`
+          : `${item.driverName}`;
+
+      const now = new Date();
+      document.getElementById('sigModalTimestamp').textContent = 
+        `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+      document.getElementById('signatureModal').classList.remove('hidden');
+
+      const authInp = document.getElementById('sigAuthCodeInput');
+      if (authInp) {
+        authInp.value = '';
+      }
+
+      const authSec = document.getElementById('sigAuthCodeSection');
+      if (authSec) {
+        if (activeTargetGroup === 'driver') {
+          authSec.classList.remove('hidden');
+        } else {
+          authSec.classList.add('hidden');
+        }
+      }
+
+      setTimeout(() => {
+        resizeCanvas();
+        clearSignatureCanvas();
+      }, 30);
+    }
+
+    function closeSignatureModal() {
+      document.getElementById('signatureModal').classList.add('hidden');
+      currentSigningItem = null;
+    }
+
+    // ==================== ADMIN SIGNATURE DELETION ENGINE ====================
+    function deleteSignature(itemId) {
+      const activeSess = getActiveSession();
+      const groupData = appData.groups[activeTargetGroup];
+      const item = groupData.roster.find(r => r.id === itemId);
+      if (!item) return;
+
+      if (item.signatures && item.signatures[activeSess.id]) {
+        delete item.signatures[activeSess.id];
+      }
+
+      item.signed = false;
+      item.sigData = null;
+      item.sigTime = null;
+
+      pushCloudSignature(activeTargetGroup, item, activeSess.id, 'delete');
+      saveState();
+      renderAll();
+      showToast(`[${item.driverName || item.carNo}] 님의 서명이 성공적으로 삭제되었습니다.`);
+    }
+
+    function saveSignature() {
+      if (!currentSigningItem) {
+        showToast('서명 대상자가 선택되지 않았습니다.');
+        return;
+      }
+
+      if (!canvas) canvas = document.getElementById('signatureCanvas');
+      if (canvas && !ctx) ctx = canvas.getContext('2d');
+
+      if (!hasDrawn && canvas && ctx) {
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 22px Pretendard, sans-serif';
+        const nameToStamp = currentSigningItem.driverName || currentSigningItem.carNo;
+        ctx.fillText(nameToStamp + ' (서명)', 25, 65);
+        hasDrawn = true;
+      }
+
+      if (activeTargetGroup === 'driver') {
+        const authInp = document.getElementById('sigAuthCodeInput');
+        const enteredCode = authInp ? authInp.value.trim() : '';
+        const expectedCode = String(appData.authCode || '7429').trim();
+
+        if (!enteredCode) {
+          showToast('현장 빔프로젝터에 표시된 4자리 인증코드를 입력해주세요.');
+          if (authInp) authInp.focus();
+          return;
+        }
+        if (enteredCode !== expectedCode) {
+          showToast('인증코드가 일치하지 않습니다. 현장 화면의 4자리 코드를 확인해주세요.');
+          if (authInp) {
+            authInp.value = '';
+            authInp.focus();
+          }
+          return;
+        }
+      }
+
+      let sigData = '';
+      try {
+        sigData = canvas ? compressSignatureCanvas(canvas) : '';
+      } catch (err) {
+        const nameText = currentSigningItem.driverName || currentSigningItem.carNo;
+        sigData = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40"><text x="10" y="25" font-family="sans-serif" font-size="16" font-weight="bold" fill="%230f172a">' + encodeURIComponent(nameText) + '</text></svg>';
+      }
+
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+      const activeSess = getActiveSession();
+      if (!currentSigningItem.signatures) currentSigningItem.signatures = {};
+      currentSigningItem.signatures[activeSess.id] = {
+        signed: true,
+        sigData: sigData,
+        sigTime: timeStr
+      };
+
+      currentSigningItem.signed = true;
+      currentSigningItem.sigData = sigData;
+      currentSigningItem.sigTime = timeStr;
+
+      const savedPersonName = currentSigningItem.driverName || currentSigningItem.carNo;
+      // [핵심] 다른 기기(관리자 폰)로 서명 완료 패킷을 즉시 실시간 전송!
+      pushCloudSignature(activeTargetGroup, currentSigningItem, activeSess.id, 'sign');
+      saveState();
+      closeSignatureModal();
+      renderAll();
+      showToast(`✅ [${savedPersonName}] 님의 서명이 관리자 화면으로 실시간 전송 및 저장되었습니다.`);
+    }
+
+    // ==================== ADVANCED KOREAN ROSTER PARSER ====================
+    const KNOWN_CELLS = [
+      '춘천 피닉스', '춘천피닉스', '충주 이글스', '충주이글스', '베스트', '초롱이',
+      'TOP', '베이직', '소물전담', '소물', '에어컨지원', '에어컨',
+      '원주AC', '여주AC', '충주AC', '제천AC', '춘천AC', '홍천AC',
+      '운영스탭', '운영지원팀', '주간1팀', '주간2팀', '검수팀', '야간입고', '간선하역', '피킹팀'
+    ];
+
+    function parseRosterLine(line, isDriverGroup, defaultCell) {
+      const clean = line.trim();
+      if (!clean) return null;
+
+      // '휴무' 또는 '비가동' 표기가 있으면 휴무, 그 외는 모두 가동
+      const isOff = /휴무|OFF|off|비가동/i.test(clean);
+
+      let carNo = '';
+      const carMatch = clean.match(/([가-힣0-9]{2,8}[가-힣]\d{4}|\b\d{4}\b)/);
+      if (carMatch) {
+        carNo = carMatch[1];
+      }
+
+      let cell = defaultCell || '춘천 피닉스';
+      const sortedCells = [...KNOWN_CELLS].sort((a, b) => b.length - a.length);
+      for (const kc of sortedCells) {
+        if (clean.includes(kc)) {
+          cell = kc;
+          break;
+        }
+      }
+      if (cell === '춘천피닉스') cell = '춘천 피닉스';
+      if (cell === '충주이글스' || cell === '충주피닉스' || cell === '충주 피닉스') cell = '충주 이글스';
+      if (cell === '소물') cell = '소물전담';
+
+      let name = '';
+      // '보관하역(주간)', '보관(야간)' 같은 소속 표기의 괄호 안 글자를 이름으로 오인하지 않도록 제거
+      const forName = clean.replace(/보관(?:하역)?\s*\([^)]*\)/g, ' ');
+      const parenMatch = forName.match(/\(([가-힣]{2,4})\)/);
+      if (parenMatch) {
+        name = parenMatch[1];
+      }
+
+      if (!name) {
+        let textWithoutTags = forName;
+        if (carNo) textWithoutTags = textWithoutTags.replace(carNo, ' ');
+        for (const kc of sortedCells) {
+          textWithoutTags = textWithoutTags.replace(kc, ' ');
+        }
+        textWithoutTags = textWithoutTags.replace(/\(|\)|가동|근무|휴무|OFF|off|비가동|배차/gi, ' ');
+
+        const tokens = textWithoutTags.split(/[\t, ]+/).filter(t => t.trim());
+        for (const token of tokens) {
+          if (/^[가-힣]{2,4}$/.test(token) && !KNOWN_CELLS.includes(token)) {
+            name = token;
+            break;
+          }
+        }
+      }
+
+      if (isDriverGroup && carNo && !name) {
+        const master = OFFICIAL_1112_DRIVERS.find(d => d.carNo === carNo || d.carNo.endsWith(carNo));
+        if (master) {
+          name = master.driverName;
+          if (!cell || cell === '춘천 피닉스') cell = master.cell;
+        }
+      }
+
+      if (!name) {
+        name = isDriverGroup ? (carNo ? `${carNo} 기사` : '기사') : '직원';
+      }
+
+      return {
+        carNo: carNo || (isDriverGroup ? '6300' : 'ST'),
+        driverName: name,
+        cell: cell,
+        status: isOff ? 'off' : 'work'
+      };
+    }
+
+    // ==================== UPLOAD MODAL LOGIC ====================
+    function openUploadModal() {
+      uploadTargetGroup = activeTargetGroup;
+      updateUploadGroupSelectionUI();
+      const fileInp = document.getElementById('uploadFileInput');
+      if (fileInp) fileInp.value = '';
+      fillCurrentRosterIntoTextarea();
+      document.getElementById('uploadModal').classList.remove('hidden');
+    }
+
+    function closeUploadModal() {
+      document.getElementById('uploadModal').classList.add('hidden');
+      const fileInp = document.getElementById('uploadFileInput');
+      if (fileInp) fileInp.value = '';
+    }
+
+    function selectUploadTargetGroup(groupKey) {
+      uploadTargetGroup = groupKey;
+      updateUploadGroupSelectionUI();
+      fillCurrentRosterIntoTextarea();
+    }
+
+    function updateUploadGroupSelectionUI() {
+      ['driver', 'staff', 'warehouse_day', 'warehouse_night'].forEach(k => {
+        const btn = document.getElementById(`btnUploadGroup_${k}`);
+        const countSpan = document.getElementById(`uploadGroupCount_${k}`);
+        if (!btn) return;
+        if (k === uploadTargetGroup) {
+          btn.className = 'p-2 rounded-xl border-2 font-bold text-left flex items-center justify-between transition-all border-blue-600 bg-blue-50 text-blue-800 shadow-xs';
+          if (countSpan) countSpan.className = 'text-[10px] text-blue-600 font-bold';
+        } else {
+          btn.className = 'p-2 rounded-xl border-2 font-bold text-left flex items-center justify-between transition-all border-slate-200 text-slate-700 hover:border-slate-300';
+          if (countSpan) countSpan.className = 'text-[10px] text-slate-400';
+        }
+      });
+
+      const g = appData.groups[uploadTargetGroup];
+      const dzTitle = document.getElementById('uploadDropzoneTitle');
+      const applyBtn = document.getElementById('modalApplyBtnLabel');
+      if (dzTitle) dzTitle.textContent = `[${g.name}] 당일 ${g.workTerm}/휴무 배차표 사진 첨부 (다중 선택 가능)`;
+      const dzDesc = document.getElementById('uploadDropzoneDesc');
+      if (dzDesc) {
+        dzDesc.textContent = (uploadTargetGroup === 'warehouse_day' || uploadTargetGroup === 'warehouse_night')
+          ? '사진을 첨부하면 고정된 보관하역 명단이 적용됩니다. (맨 앞 고정 인원 + 나머지 가나다순)'
+          : '배차표를 위에서 아래 순서대로 나눠 캡처한 사진 여러 장을 한 번에 선택하세요. (사진끼리 겹치는 행이 없어야 합니다)';
+      }
+      if (applyBtn) applyBtn.textContent = `[${g.name}] 명단 및 ${g.workTerm} 상태 업데이트 적용`;
+    }
+
+    function renderUploadedChips() {
+      const container = document.getElementById('presetChipsContainer');
+      if (!container) return;
+
+      const g = appData.groups[uploadTargetGroup];
+      const files = (g && g.uploadedFiles) ? g.uploadedFiles : [];
+
+      let html = '';
+      if (files.length === 0) {
+        html += `<span class="text-[10px] text-slate-400 py-0.5">첨부된 배차표가 없습니다. 위 파란 박스를 눌러 배차표를 첨부해주세요.</span>`;
+      } else {
+        files.forEach(f => {
+          const isActive = f.active;
+          const boxClass = isActive
+            ? 'inline-flex items-center rounded-lg text-[10px] font-black border transition-all shadow-xs bg-blue-600 text-white border-blue-600'
+            : 'inline-flex items-center rounded-lg text-[10px] font-bold border transition-all bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300';
+          const btnXClass = isActive
+            ? 'px-1.5 py-1 text-blue-200 hover:text-white hover:bg-black/15 rounded-r-lg border-l border-blue-400/60 transition-colors'
+            : 'px-1.5 py-1 text-slate-400 hover:text-red-600 hover:bg-slate-200 rounded-r-lg border-l border-slate-300 transition-colors';
+
+          html += `
+            <div class="${boxClass}">
+              <button type="button" onclick="selectUploadedFileChip('${f.id}')" class="px-2 py-1 flex items-center gap-1 active:scale-95">
+                <span>${f.label}</span>
+              </button>
+              <button type="button" onclick="deleteUploadedFileChip('${f.id}', event)" class="${btnXClass}" title="이 배차표 삭제 및 인원 초기화">
+                <i class="fa-solid fa-xmark text-xs"></i>
+              </button>
+            </div>
+          `;
+        });
+      }
+
+      html += `
+        <button type="button" onclick="clearPasteTextArea()" class="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded hover:bg-red-100 ml-auto" title="입력창 및 명단 전체 비우기">
+          <i class="fa-solid fa-trash-can text-[9px]"></i> 초기화
+        </button>
+      `;
+
+      container.innerHTML = html;
+    }
+
+    function selectUploadedFileChip(chipId) {
+      const g = appData.groups[uploadTargetGroup];
+      if (!g || !g.uploadedFiles) return;
+      const target = g.uploadedFiles.find(f => f.id === chipId);
+      if (!target) return;
+
+      g.uploadedFiles.forEach(f => { f.active = (f.id === chipId); });
+      document.getElementById('pasteTextArea').value = target.rawText || '';
+      parsePastedText(false);
+      autoCommitParsedRoster();
+      renderUploadedChips();
+    }
+
+    function deleteUploadedFileChip(chipId, e) {
+      if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+      const g = appData.groups[uploadTargetGroup];
+      if (!g) return;
+
+      g.uploadedFiles = (g.uploadedFiles || []).filter(f => f.id !== chipId);
+
+      if (g.uploadedFiles.length > 0) {
+        // 남은 칩이 있으면 가장 마지막 칩으로 자동 전환 (절대 0명으로 초기화되지 않음!)
+        const nextFile = g.uploadedFiles[g.uploadedFiles.length - 1];
+        nextFile.active = true;
+        document.getElementById('pasteTextArea').value = nextFile.rawText || '';
+        parsePastedText(false);
+        autoCommitParsedRoster();
+        renderUploadedChips();
+        showToast(`🗑️ 선택하신 항목이 삭제되고 [${nextFile.label}] 명단으로 유지됩니다.`);
+      } else {
+        // 모든 칩이 삭제된 경우:
+        // 운영스탭(13명), 보관하역 주간(7명), 보관하역 야간(8명)은 고정 명단이므로 절대 0명으로 날아가지 않고 고정 명단으로 복원!
+        // 설치기사는 초기 상태(파일 첨부 대기, 0대)로 복원하되 수기 수정된 마스터 성명은 영구 보존!
+        if (uploadTargetGroup === 'staff' || uploadTargetGroup === 'warehouse_day' || uploadTargetGroup === 'warehouse_night') {
+          g.roster = getBaseDefaultRoster(uploadTargetGroup);
+          saveState();
+          fillCurrentRosterIntoTextarea();
+          updateEduInfoDisplay();
+          renderAll();
+          showToast(`✅ 추가 입력 항목이 삭제되고 [${g.name}] 기본 고정 명단(${g.roster.length}${g.unit})이 유지됩니다.`);
+        } else {
+          g.roster = [];
+          parsedUploadItems = null;
+          const ta = document.getElementById('pasteTextArea');
+          if (ta) ta.value = '';
+          const pills = document.getElementById('quickToggleRosterPills');
+          if (pills) pills.innerHTML = '';
+          const badge = document.getElementById('analysisBadge');
+          if (badge) badge.textContent = '파일 첨부 대기';
+          const summary = document.getElementById('analysisSummaryText');
+          if (summary) summary.textContent = '배차표 파일을 첨부하시면 인원이 자동 계산됩니다.';
+          const offList = document.getElementById('detectedOffList');
+          if (offList) offList.innerHTML = '';
+          saveState();
+          updateEduInfoDisplay();
+          renderAll();
+          renderUploadedChips();
+          showToast('🗑️ 배차표가 삭제되어 파일 첨부 대기 상태로 초기화되었습니다.');
+        }
+      }
+    }
+
+    function fillCurrentRosterIntoTextarea() {
+      const g = appData.groups[uploadTargetGroup];
+      const isDriver = uploadTargetGroup === 'driver';
+      if (!g.roster || g.roster.length === 0) {
+        document.getElementById('pasteTextArea').value = '';
+        parsedUploadItems = null;
+        const pills = document.getElementById('quickToggleRosterPills');
+        if (pills) pills.innerHTML = '';
+        const badge = document.getElementById('analysisBadge');
+        if (badge) badge.textContent = '파일 첨부 대기';
+        const summary = document.getElementById('analysisSummaryText');
+        if (summary) summary.textContent = '배차표 파일을 첨부하시면 인원이 자동 계산됩니다.';
+        const offList = document.getElementById('detectedOffList');
+        if (offList) offList.innerHTML = '';
+        renderUploadedChips();
+        return;
+      }
+
+      const lines = g.roster.map(r => {
+        const statusLabel = r.status === 'work' ? g.workTerm : '휴무';
+        if (isDriver) {
+          return `${r.cell}\t${r.carNo}\t${r.driverName}\t${statusLabel}`;
+        } else {
+          return `${r.driverName}\t${r.cell}\t${statusLabel}`;
+        }
+      });
+      document.getElementById('pasteTextArea').value = lines.join('\n');
+      parsePastedText(false);
+      renderUploadedChips();
+    }
+
+    function registerUploadedChip(label, rawText) {
+      const g = appData.groups[uploadTargetGroup];
+      if (!g.uploadedFiles) g.uploadedFiles = [];
+      g.uploadedFiles.forEach(f => { f.active = false; });
+      const existing = g.uploadedFiles.find(f => f.label === label);
+      if (existing) {
+        existing.rawText = rawText;
+        existing.active = true;
+      } else {
+        g.uploadedFiles.push({
+          id: 'file-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+          label: label,
+          rawText: rawText,
+          active: true
+        });
+      }
+      renderUploadedChips();
+    }
+
+    function loadOfficial1111Preset() {
+      uploadTargetGroup = 'driver';
+      updateUploadGroupSelectionUI();
+      const lines = OFFICIAL_1111_DRIVERS_BACKUP.map(d => {
+        const s = d.status === 'work' ? '가동' : (d.area === '비가동' ? '비가동' : '휴무');
+        return `${d.cell}\t${d.carNo}\t${d.driverName}\t${s}`;
+      });
+      const rawText = lines.join('\n');
+      document.getElementById('pasteTextArea').value = rawText;
+      parsePastedText(false);
+      registerUploadedChip('11/11 배차표(가동54/휴무10)', rawText);
+      autoCommitParsedRoster();
+      showToast('✅ 11/11 배차표(가동 54대 / 당일휴무 10대)가 업로드 반영되었습니다.');
+    }
+
+    function loadOfficial1112Preset() {
+      uploadTargetGroup = 'driver';
+      updateUploadGroupSelectionUI();
+      const lines = OFFICIAL_1112_DRIVERS.map(d => {
+        const s = d.status === 'work' ? '가동' : (d.area === '비가동' ? '비가동' : '휴무');
+        return `${d.cell}\t${d.carNo}\t${d.driverName}\t${s}`;
+      });
+      const rawText = lines.join('\n');
+      document.getElementById('pasteTextArea').value = rawText;
+      parsePastedText(false);
+      registerUploadedChip('11/12 배차표(가동49/휴무15)', rawText);
+      autoCommitParsedRoster();
+      showToast('✅ 11/12 배차표(가동 49대 / 당일휴무 15대)가 업로드 반영되었습니다.');
+    }
+
+    function loadOfficial1111DriverPreset() { loadOfficial1111Preset(); }
+    function loadOfficial1112DriverPreset() { loadOfficial1112Preset(); }
+    function loadOfficial1111BackupPreset() { loadOfficial1111Preset(); }
+
+    function loadRealStaffPreset() {
+      uploadTargetGroup = 'staff';
+      updateUploadGroupSelectionUI();
+      const g = appData.groups.staff;
+      const baseList = getBaseDefaultRoster('staff');
+      const lines = baseList.map(m => `${m.driverName}${m.role ? ' ' + m.role : ''}\t${m.cell}\t${m.status === 'work' ? '근무' : '휴무'}`);
+      const rawText = lines.join('\n');
+      document.getElementById('pasteTextArea').value = rawText;
+      parsePastedText(false);
+      registerUploadedChip(`운영스탭 명단(${baseList.length}명)`, rawText);
+      autoCommitParsedRoster();
+      showToast(`✅ 운영스탭 명단(${baseList.length}명)이 업로드 반영되었습니다.`);
+    }
+
+    function loadWarehousePreset(groupKey) {
+      uploadTargetGroup = groupKey;
+      updateUploadGroupSelectionUI();
+      const g = appData.groups[groupKey];
+      const baseList = getBaseDefaultRoster(groupKey);
+      const rawText = baseList.map(m => `${m.driverName}\t${g.name}\t${m.status === 'work' ? '근무' : '휴무'}`).join('\n');
+      document.getElementById('pasteTextArea').value = rawText;
+      parsePastedText(false);
+      registerUploadedChip(`${g.name} 명단(${baseList.length}명)`, rawText);
+      autoCommitParsedRoster();
+      showToast(`✅ ${g.name} 고정 명단(${baseList.length}명)이 반영되었습니다.`);
+    }
+
+    // [핵심] 수기 수정된 내용을 마스터 DB에 영구 학습/저장하여 앞으로 새 배차표를 올려도 수정된 성명/소속이 계속 유지되도록 처리!
+    function persistManualEditsToMaster(newRoster, rawText) {
+      const g = appData.groups[uploadTargetGroup];
+      if (!g) return;
+
+      if (uploadTargetGroup === 'driver') {
+        if (!appData.customDriverNames) appData.customDriverNames = {};
+        newRoster.forEach(item => {
+          if (item.carNo && item.driverName) {
+            appData.customDriverNames[item.carNo] = {
+              driverName: item.driverName,
+              cell: item.cell
+            };
+            // 마스터 배열(11/11 및 11/12)에도 즉시 업데이트하여 향후 배차표 업로드 시에도 수정된 이름이 그대로 나오게 함
+            [OFFICIAL_1111_DRIVERS_BACKUP, OFFICIAL_1112_DRIVERS].forEach(arr => {
+              const target = arr.find(d => d.carNo === item.carNo || d.carNo.endsWith(item.carNo));
+              if (target) {
+                target.driverName = item.driverName;
+                if (item.cell) target.cell = item.cell;
+              }
+            });
+          }
+        });
+      } else {
+        // 스탭 / 보관하역(주간) / 보관하역(야간) 수기 수정 시 해당 그룹의 기본 고정 명단(customBaseRoster) 자체를 업데이트!
+        g.customBaseRoster = newRoster.map(r => ({ ...r }));
+        if (uploadTargetGroup === 'warehouse_day' || uploadTargetGroup === 'warehouse_night') {
+          WAREHOUSE_FIXED_NAMES[uploadTargetGroup] = newRoster.map(r => r.driverName);
+        }
+      }
+
+      // 별도의 '수기 입력(...)' 중복 칩을 만들지 않고, 현재 활성화된 칩이 있으면 그 칩의 텍스트와 라벨을 깔끔하게 갱신!
+      if (g.uploadedFiles && g.uploadedFiles.length > 0) {
+        const activeChip = g.uploadedFiles.find(f => f.active) || g.uploadedFiles[g.uploadedFiles.length - 1];
+        if (activeChip && rawText) {
+          const wCnt = newRoster.filter(r => r.status === 'work').length;
+          const oCnt = newRoster.filter(r => r.status === 'off').length;
+          activeChip.rawText = rawText;
+          // 기존 라벨의 괄호 안 숫자만 최신화
+          if (/\(.*\)/.test(activeChip.label)) {
+            activeChip.label = activeChip.label.replace(/\(.*\)/, `(${g.workTerm}${wCnt}/휴무${oCnt})`);
+          }
+        }
+      }
+    }
+
+    function autoCommitParsedRoster() {
+      if (parsedUploadItems && parsedUploadItems.roster && parsedUploadItems.roster.length > 0) {
+        const g = appData.groups[uploadTargetGroup];
+        const existingMap = {};
+        const keyOf = (it) => (uploadTargetGroup === 'driver') ? (it.carNo || it.driverName) : it.driverName;
+        (g.roster || []).forEach(item => {
+          existingMap[keyOf(item)] = item;
+        });
+
+        g.roster = parsedUploadItems.roster.map(newItem => {
+          const prev = existingMap[keyOf(newItem)];
+          return {
+            ...newItem,
+            id: prev ? prev.id : newItem.id,
+            carNo: newItem.carNo,
+            driverName: newItem.driverName,
+            cell: newItem.cell,
+            status: newItem.status,
+            signed: newItem.status === 'work' ? (prev ? prev.signed : false) : false,
+            sigData: newItem.status === 'work' ? (prev ? prev.sigData : null) : null,
+            sigTime: newItem.status === 'work' ? (prev ? prev.sigTime : null) : null,
+            signatures: prev ? (prev.signatures || {}) : {}
+          };
+        });
+
+        const ta = document.getElementById('pasteTextArea');
+        persistManualEditsToMaster(g.roster, ta ? ta.value.trim() : '');
+
+        saveState();
+        activeTargetGroup = uploadTargetGroup;
+        const sel = document.getElementById('targetGroupSelect');
+        if (sel) sel.value = activeTargetGroup;
+
+        updateEduInfoDisplay();
+        renderAll();
+      }
+    }
+
+    // ==================== 배차표 사진 인식 (격자선 기반 행 분석) ====================
+    function analyzeDispatchRows(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onerror = () => resolve(null);
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = () => resolve(null);
+          img.onload = () => {
+            try {
+              const w = img.naturalWidth || img.width;
+              const h = img.naturalHeight || img.height;
+              const c = document.createElement('canvas');
+              c.width = w; c.height = h;
+              const cx = c.getContext('2d', { willReadFrequently: true });
+              cx.drawImage(img, 0, 0);
+              const d = cx.getImageData(0, 0, w, h).data;
+
+              const gx0 = Math.floor(w * 0.30), gx1 = Math.floor(w * 0.80);
+              const px0 = Math.floor(w * 0.42), px1 = Math.floor(w * 0.80);
+
+              const darkFrac = new Float32Array(h);
+              const pinkFrac = new Float32Array(h);
+              const grayFrac = new Float32Array(h);
+              const yellowFrac = new Float32Array(h);
+
+              for (let y = 0; y < h; y++) {
+                let dark = 0, nD = 0, yel = 0;
+                for (let x = gx0; x < gx1; x += 2) {
+                  const i = (y * w + x) * 4;
+                  const r = d[i], g = d[i + 1], b = d[i + 2];
+                  nD++;
+                  if (0.299 * r + 0.587 * g + 0.114 * b < 140) dark++;
+                  if (r > 200 && g > 200 && b < 120) yel++;
+                }
+                let pink = 0, gray = 0, nP = 0;
+                for (let x = px0; x < px1; x += 2) {
+                  const i = (y * w + x) * 4;
+                  const r = d[i], g = d[i + 1], b = d[i + 2];
+                  nP++;
+                  if (r > 200 && g > 150 && (r - g) > 18 && (r - b) > 8) pink++;
+                  const L = 0.299 * r + 0.587 * g + 0.114 * b;
+                  if (L >= 50 && L <= 120 && Math.abs(r - g) < 14 && Math.abs(g - b) < 14) gray++;
+                }
+                darkFrac[y] = dark / nD;
+                yellowFrac[y] = yel / nD;
+                pinkFrac[y] = pink / nP;
+                grayFrac[y] = gray / nP;
+              }
+
+              let startY = 0;
+              for (let y = 0; y < Math.floor(h * 0.3); y++) {
+                if (yellowFrac[y] > 0.3) startY = y + 3;
+              }
+
+              const grayRuns = [];
+              const isGrayLine = new Uint8Array(h);
+              let gs = -1;
+              for (let y = startY; y <= h; y++) {
+                const g = (y < h) && grayFrac[y] > 0.5;
+                if (g && gs < 0) gs = y;
+                if (!g && gs >= 0) {
+                  if (y - gs >= 8) {
+                    grayRuns.push([gs, y - 1]);
+                    for (let k = gs; k < y; k++) isGrayLine[k] = 1;
+                  }
+                  gs = -1;
+                }
+              }
+
+              const lineClusters = [];
+              let cs = -1, last = -1;
+              for (let y = startY; y < h; y++) {
+                const isLine = darkFrac[y] > 0.55 && !isGrayLine[y];
+                if (isLine) {
+                  if (cs < 0) cs = y;
+                  last = y;
+                } else if (cs >= 0 && y - last > 1) {
+                  lineClusters.push([cs, last]);
+                  cs = -1;
+                }
+              }
+              if (cs >= 0) lineClusters.push([cs, last]);
+
+              const centers = lineClusters.filter(cl => cl[1] - cl[0] <= 6).map(cl => (cl[0] + cl[1]) / 2);
+              const gaps = [];
+              for (let i = 1; i < centers.length; i++) {
+                const gp = centers[i] - centers[i - 1];
+                if (gp > 12 && gp < 200) gaps.push(gp);
+              }
+              gaps.sort((a, b) => a - b);
+              const rowH = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 40;
+
+              const events = [];
+              lineClusters.forEach(cl => { if (cl[1] - cl[0] <= 6) events.push({ s: cl[0], e: cl[1], gray: false }); });
+              grayRuns.forEach(gr => events.push({ s: gr[0], e: gr[1], gray: true }));
+              events.sort((a, b) => a.s - b.s);
+
+              const rows = [];
+              const judgePink = (a, b) => {
+                let sum = 0, n = 0;
+                for (let y = a + 2; y <= b - 2; y++) { sum += pinkFrac[y]; n++; }
+                return n > 0 && (sum / n) > 0.30;
+              };
+              const addGap = (a, b) => {
+                const gh = b - a;
+                if (gh < rowH * 0.6) return;
+                const cnt = Math.max(1, Math.round(gh / rowH));
+                const step = gh / cnt;
+                for (let k = 0; k < cnt; k++) {
+                  rows.push({ off: judgePink(Math.floor(a + k * step), Math.floor(a + (k + 1) * step)) });
+                }
+              };
+
+              let prevEnd = startY;
+              events.forEach(ev => {
+                if (ev.s > prevEnd) addGap(prevEnd, ev.s);
+                if (ev.gray) {
+                  const cnt = Math.max(1, Math.round((ev.e - ev.s + 1) / rowH));
+                  for (let k = 0; k < cnt; k++) rows.push({ off: true });
+                }
+                if (ev.e > prevEnd) prevEnd = ev.e;
+              });
+              addGap(prevEnd, h - 1);
+
+              resolve(rows);
+            } catch (err) {
+              console.warn('row analysis error:', err);
+              resolve(null);
+            }
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function processSingleUploadedFile(file, fileIndex, totalFiles) {
+      const fname = (file.name || '').toLowerCase();
+      const isTextFile = /\.(csv|txt|tsv)$/i.test(fname);
+
+      if (isTextFile) {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            const content = (e.target.result || '').trim();
+            if (content) {
+              document.getElementById('pasteTextArea').value = content;
+              parsePastedText(false);
+              const g = appData.groups[uploadTargetGroup];
+              const wCnt = parsedUploadItems ? parsedUploadItems.roster.filter(r => r.status === 'work').length : 0;
+              const oCnt = parsedUploadItems ? parsedUploadItems.roster.filter(r => r.status === 'off').length : 0;
+              resolve({
+                label: `${file.name}(${g.workTerm}${wCnt}/휴무${oCnt})`,
+                rawText: content
+              });
+            } else {
+              resolve(null);
+            }
+          };
+          reader.onerror = () => resolve(null);
+          reader.readAsText(file, 'utf-8');
+        });
+      }
+
+      if (uploadTargetGroup === 'staff') {
+        const baseList = getBaseDefaultRoster('staff');
+        const lines = baseList.map(m => `${m.driverName}${m.role ? ' ' + m.role : ''}\t${m.cell}\t${m.status === 'work' ? '근무' : '휴무'}`);
+        return {
+          label: `운영스탭 명단(${baseList.length}명)`,
+          rawText: lines.join('\n')
+        };
+      }
+
+      if (uploadTargetGroup === 'warehouse_day' || uploadTargetGroup === 'warehouse_night') {
+        const g = appData.groups[uploadTargetGroup];
+        const baseList = getBaseDefaultRoster(uploadTargetGroup);
+        return {
+          label: `${g.name} 명단(${baseList.length}명)`,
+          rawText: baseList.map(m => `${m.driverName}\t${g.name}\t${m.status === 'work' ? '근무' : '휴무'}`).join('\n')
+        };
+      }
+
+      return null;
+    }
+
+    async function handleFileSelected(event) {
+      const fileList = event.target.files ? Array.from(event.target.files) : [];
+      if (fileList.length === 0) return;
+
+      event.target.value = '';
+
+      showToast(`📸 총 ${fileList.length}개의 파일을 분석하고 있습니다...`);
+
+      const isImg = f => /^image\//.test(f.type) || /\.(png|jpe?g|webp|heic)$/i.test(f.name || '');
+      const processedResults = [];
+      let countWarn = null;
+
+      const base = OFFICIAL_1112_DRIVERS;
+      let buf = [];
+      const flush = () => {
+        const rows = buf.slice(0, base.length);
+        const lines = base.map((dr, i) => {
+          const off = rows[i] ? rows[i].off : false;
+          return `${dr.cell}\t${dr.carNo}\t${dr.driverName}\t${off ? '휴무' : '가동'}`;
+        });
+        const offCnt = rows.filter(r => r.off).length;
+        const workCnt = base.length - offCnt;
+        processedResults.push({
+          label: `배차표#${processedResults.length + 1}(가동${workCnt}/휴무${offCnt})`,
+          rawText: lines.join('\n')
+        });
+        if (buf.length !== base.length) countWarn = buf.length;
+        buf = [];
+      };
+
+      for (let i = 0; i < fileList.length; i++) {
+        const f = fileList[i];
+        if (uploadTargetGroup === 'driver' && isImg(f)) {
+          const rows = await analyzeDispatchRows(f);
+          if (!rows) continue;
+          buf.push(...rows);
+          if (buf.length >= base.length - 2) flush();
+        } else {
+          const res = await processSingleUploadedFile(f, i, fileList.length);
+          if (res && res.rawText) processedResults.push(res);
+        }
+      }
+      if (buf.length > 0) flush();
+
+      if (processedResults.length === 0) {
+        showToast('파일을 분석할 수 없습니다.');
+        return;
+      }
+
+      processedResults.forEach((item) => {
+        registerUploadedChip(item.label, item.rawText);
+      });
+
+      const lastItem = processedResults[processedResults.length - 1];
+      document.getElementById('pasteTextArea').value = lastItem.rawText;
+      parsePastedText(false);
+      autoCommitParsedRoster();
+      renderUploadedChips();
+
+      if (countWarn !== null) {
+        showToast(`⚠️ 인식된 행 ${countWarn}개 (정상 ${base.length}개). 사진 순서/잘림을 확인하고 아래 이름 칩으로 보정하세요.`);
+      } else if (processedResults.length > 1) {
+        showToast(`✅ 총 ${processedResults.length}장의 배차표가 등록되었습니다! 원하는 배차표 칩을 터치해 전환하세요.`);
+      } else {
+        closeUploadModal();
+        showToast(`✅ [${lastItem.label}] 업로드 및 인원 반영이 완료되었습니다!`);
+      }
+    }
+
+    function toggleParsedItemStatus(idx) {
+      if (!parsedUploadItems || !parsedUploadItems.roster || !parsedUploadItems.roster[idx]) return;
+      const item = parsedUploadItems.roster[idx];
+      item.status = item.status === 'work' ? 'off' : 'work';
+
+      const isDriver = uploadTargetGroup === 'driver';
+      const lines = parsedUploadItems.roster.map(d => {
+        const s = d.status === 'work' ? (isDriver ? '가동' : '근무') : '휴무';
+        return isDriver ? `${d.cell}\t${d.carNo}\t${d.driverName}\t${s}` : `${d.driverName}\t${d.cell}\t${s}`;
+      });
+      const rawText = lines.join('\n');
+      document.getElementById('pasteTextArea').value = rawText;
+      parsePastedText(false);
+      autoCommitParsedRoster();
+      renderUploadedChips();
+    }
+
+    function parsePastedText(commitImmediately = true) {
+      const ta = document.getElementById('pasteTextArea');
+      const text = ta ? ta.value.trim() : '';
+      if (!text) return;
+
+      const rawLines = text.split(/\r?\n/).filter(l => l.trim());
+      const g = appData.groups[uploadTargetGroup];
+      const isDriver = uploadTargetGroup === 'driver';
+      const unit = g.unit;
+      const term = g.workTerm;
+
+      const offList = [];
+      const newRoster = [];
+
+      rawLines.forEach((line, idx) => {
+        const parsed = parseRosterLine(line, isDriver, g.name);
+        if (!parsed) return;
+
+        if (parsed.status === 'off') {
+          offList.push(parsed.driverName || parsed.carNo);
+        }
+
+        newRoster.push({
+          id: `${uploadTargetGroup === 'driver' ? 'd' : uploadTargetGroup}-${idx + 1}`,
+          carNo: parsed.carNo,
+          driverName: parsed.driverName,
+          role: parsed.role || '',
+          cell: parsed.cell,
+          status: parsed.status,
+          signed: false,
+          sigData: null
+        });
+      });
+
+      const total = newRoster.length;
+      const offCount = offList.length;
+      const workCount = total - offCount;
+
+      const badge = document.getElementById('analysisBadge');
+      if (badge) badge.textContent = `${term}: ${workCount}${unit} / 휴무: ${offCount}${unit}`;
+      const summary = document.getElementById('analysisSummaryText');
+      if (summary) summary.textContent = `[${g.name}] 총 ${total}${unit} 중 정상 ${term} ${workCount}${unit}, 휴무/비가동 ${offCount}${unit} 감지`;
+
+      const offBox = document.getElementById('detectedOffList');
+      if (offBox) {
+        if (offList.length > 0) {
+          let tagsHtml = `<span class="text-[11px] font-bold text-red-600 block w-full mb-0.5">🛑 감지된 휴무/비가동 대상 (${offList.length}${unit}):</span>`;
+          offList.forEach(n => {
+            tagsHtml += `<span class="text-[10px] font-bold bg-red-50 text-red-700 px-1.5 py-0.5 rounded border border-red-200">${n}</span>`;
+          });
+          offBox.innerHTML = tagsHtml;
+        } else {
+          offBox.innerHTML = `<span class="text-[11px] text-emerald-600 font-bold">전원 정상 ${term} 대상입니다.</span>`;
+        }
+      }
+
+      if (uploadTargetGroup === 'staff') {
+        const fixedTop = newRoster.filter(r => r.driverName === '곽준호' || r.driverName === '심교인');
+        const restStaff = newRoster.filter(r => r.driverName !== '곽준호' && r.driverName !== '심교인');
+        fixedTop.sort((a, b) => (a.driverName === '곽준호' ? -1 : 1));
+        restStaff.sort((a, b) => (a.driverName || '').localeCompare(b.driverName || '', 'ko'));
+        newRoster.length = 0;
+        newRoster.push(...fixedTop, ...restStaff);
+      } else if (uploadTargetGroup === 'warehouse_day' || uploadTargetGroup === 'warehouse_night') {
+        const pinName = WAREHOUSE_PIN[uploadTargetGroup];
+        newRoster.sort((a, b) => {
+          if (a.driverName === pinName && b.driverName !== pinName) return -1;
+          if (b.driverName === pinName && a.driverName !== pinName) return 1;
+          return (a.driverName || '').localeCompare(b.driverName || '', 'ko');
+        });
+      }
+
+      parsedUploadItems = {
+        group: uploadTargetGroup,
+        roster: newRoster
+      };
+
+      const pillsBox = document.getElementById('quickToggleRosterPills');
+      if (pillsBox) {
+        let pillsHtml = '';
+        newRoster.forEach((item, idx) => {
+          const isOff = item.status === 'off';
+          const label = item.driverName || item.carNo;
+          if (isOff) {
+            pillsHtml += `<button type="button" onclick="toggleParsedItemStatus(${idx})" class="px-2 py-0.5 rounded text-[10px] font-black bg-red-600 text-white shadow-2xs flex items-center gap-0.5" title="터치하면 가동으로 전환">${label} <span class="text-[8px] opacity-90">(휴무)</span></button>`;
+          } else {
+            pillsHtml += `<button type="button" onclick="toggleParsedItemStatus(${idx})" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200" title="터치하면 휴무로 전환">${label}</button>`;
+          }
+        });
+        pillsBox.innerHTML = pillsHtml;
+      }
+
+      // [핵심] 수기 수정 후 '텍스트 파싱 적용' 클릭 시:
+      // 불필요한 '수기 입력(...)' 칩을 새로 만들지 않고, 수정된 내용을 마스터 DB와 현재 명단에 영구 반영!
+      if (commitImmediately) {
+        autoCommitParsedRoster();
+        renderUploadedChips();
+        showToast(`✅ 수기 수정 사항이 영구 저장되었습니다 (${term} ${workCount}${unit} / 휴무 ${offCount}${unit})`);
+      }
+    }
+
+    function clearAnalysisResultBox() {
+      const box = document.getElementById('uploadAnalysisResult');
+      if (box) box.classList.add('hidden');
+      showToast('분석 결과 창을 닫았습니다.');
+    }
+
+    function clearPasteTextArea() {
+      const g = appData.groups[uploadTargetGroup];
+      if (!g) return;
+
+      g.uploadedFiles = [];
+      if (uploadTargetGroup === 'staff' || uploadTargetGroup === 'warehouse_day' || uploadTargetGroup === 'warehouse_night') {
+        // 스탭 및 보관하역은 초기화 버튼을 눌러도 0명이 되지 않고 기본 고정 명단으로 복원!
+        delete g.customBaseRoster;
+        if (uploadTargetGroup === 'staff') {
+          g.roster = REAL_STAFF_MEMBERS.map((m, idx) => ({
+            id: `s-${idx + 1}`,
+            carNo: `ST-${String(idx + 1).padStart(2, '0')}`,
+            driverName: m.name,
+            role: m.role,
+            cell: m.role ? '임원진' : '운영지원팀',
+            status: 'work',
+            signed: false,
+            sigData: null
+          }));
+        } else if (uploadTargetGroup === 'warehouse_day') {
+          g.roster = REAL_WAREHOUSE_DAY_MEMBERS.map(m => ({ ...m }));
+        } else {
+          g.roster = REAL_WAREHOUSE_NIGHT_MEMBERS.map(m => ({ ...m }));
+        }
+        saveState();
+        fillCurrentRosterIntoTextarea();
+        updateEduInfoDisplay();
+        renderAll();
+        showToast(`🔄 [${g.name}] 기본 고정 명단(${g.roster.length}${g.unit})으로 복원되었습니다.`);
+      } else {
+        g.roster = [];
+        const ta = document.getElementById('pasteTextArea');
+        if (ta) ta.value = '';
+        parsedUploadItems = null;
+        const pills = document.getElementById('quickToggleRosterPills');
+        if (pills) pills.innerHTML = '';
+        const badge = document.getElementById('analysisBadge');
+        if (badge) badge.textContent = '파일 첨부 대기';
+        const summary = document.getElementById('analysisSummaryText');
+        if (summary) summary.textContent = '배차표 파일을 첨부하시면 인원이 자동 계산됩니다.';
+        const offList = document.getElementById('detectedOffList');
+        if (offList) offList.innerHTML = '';
+        renderUploadedChips();
+        saveState();
+        updateEduInfoDisplay();
+        renderAll();
+        showToast('🗑️ 설치기사 배차표가 초기 대기 상태로 비워졌습니다.');
+      }
+    }
+
+    function applyUploadedList() {
+      const ta = document.getElementById('pasteTextArea');
+      const text = ta ? ta.value.trim() : '';
+      if (!text) {
+        closeUploadModal();
+        renderAll();
+        showToast('현재 상태가 적용되었습니다.');
+        return;
+      }
+      parsePastedText(false);
+      if (parsedUploadItems && parsedUploadItems.roster && parsedUploadItems.roster.length > 0) {
+        const g = appData.groups[uploadTargetGroup];
+        const workCount = parsedUploadItems.roster.filter(r => r.status === 'work').length;
+        const offCount = parsedUploadItems.roster.filter(r => r.status === 'off').length;
+        autoCommitParsedRoster();
+        closeUploadModal();
+        showToast(`✅ [${g.name}] 수기 수정 및 ${g.workTerm} ${workCount}${g.unit} / 휴무 ${offCount}${g.unit} 상태가 영구 반영되었습니다!`);
+      } else {
+        showToast('업데이트할 명단이 없습니다.');
+      }
+    }
+
+    // ==================== QR MODAL ====================
+    let qrcodeInstance = null;
+    let currentQrTab = 'worker';
+
+    function getBaseUrl() {
+      if (appData.customDomain && appData.customDomain.startsWith('http')) {
+        return appData.customDomain.split('#')[0].split('?')[0];
+      }
+      let base = window.location.href.split('#')[0].split('?')[0];
+      if (!base || base === 'about:blank' || base.startsWith('blob:') || base.startsWith('file:')) {
+        return DEFAULT_NETLIFY_URL;
+      }
+      return base;
+    }
+
+    function openQrModal() {
+      currentQrTab = 'worker';
+      const authVal = String(appData.authCode || '7429');
+      const mCode = document.getElementById('qrModalAuthCode');
+      if (mCode) mCode.textContent = authVal;
+      
+      const domainInp = document.getElementById('customDomainInput');
+      if (domainInp) domainInp.value = appData.customDomain || getBaseUrl();
+      const fbInp = document.getElementById('customFirebaseInput');
+      if (fbInp) fbInp.value = appData.firebaseDbUrl || getActiveFirebaseUrl();
+
+      document.getElementById('qrModal').classList.remove('hidden');
+      renderQrContent();
+    }
+
+    function closeQrModal() {
+      document.getElementById('qrModal').classList.add('hidden');
+    }
+
+    function switchQrTab(tab) {
+      currentQrTab = tab;
+      const workerBtn = document.getElementById('qrTab_worker');
+      const adminBtn = document.getElementById('qrTab_admin');
+      const workerBanner = document.getElementById('qrWorkerBanner');
+      const adminBanner = document.getElementById('qrAdminBanner');
+
+      if (tab === 'worker') {
+        workerBtn.className = 'flex-1 py-1.5 rounded-lg text-xs font-black bg-white text-slate-900 shadow-xs flex items-center justify-center gap-1.5';
+        adminBtn.className = 'flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5';
+        if (workerBanner) workerBanner.classList.remove('hidden');
+        if (adminBanner) adminBanner.classList.add('hidden');
+      } else {
+        adminBtn.className = 'flex-1 py-1.5 rounded-lg text-xs font-black bg-white text-slate-900 shadow-xs flex items-center justify-center gap-1.5';
+        workerBtn.className = 'flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5';
+        if (workerBanner) workerBanner.classList.add('hidden');
+        if (adminBanner) adminBanner.classList.remove('hidden');
+      }
+      renderQrContent();
+    }
+
+    function renderQrContent() {
+      const box = document.getElementById('qrcodeBox');
+      const badgeNotice = document.getElementById('qrBadgeNotice');
+      const urlInput = document.getElementById('qrUrlInput');
+      const currentPin = String(appData.authCode || '7429').trim();
+      const isWorker = currentQrTab === 'worker';
+      const baseUrl = getBaseUrl();
+
+      let liveUrl = baseUrl;
+      if (isWorker) {
+        liveUrl += `?mode=worker&group=${activeTargetGroup}&auth=${currentPin}`;
+      } else {
+        liveUrl += `?mode=admin&group=${activeTargetGroup}`;
+      }
+      if (urlInput) urlInput.value = liveUrl;
+
+      if (box) {
+        box.innerHTML = '';
+        try {
+          new QRCode(box, {
+            text: liveUrl,
+            width: 185,
+            height: 185,
+            colorDark: isWorker ? '#065f46' : '#1e3a8a',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+          });
+        } catch (e) {
+          box.innerHTML = `<div class="p-3 text-xs text-slate-400">QR코드 자동 생성 완료</div>`;
+        }
+      }
+
+      if (badgeNotice) {
+        if (isWorker) {
+          badgeNotice.className = 'mt-2 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full';
+          badgeNotice.innerHTML = `✅ 기사 전용 서명 화면으로 즉시 연결됩니다 (인증코드 자동전달)`;
+        } else {
+          badgeNotice.className = 'mt-2 text-[10px] font-bold text-blue-800 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full';
+          badgeNotice.innerHTML = `✅ 관리자 전용 제어 화면으로 즉시 연결됩니다`;
+        }
+      }
+    }
+
+    function copyQrUrl() {
+      const input = document.getElementById('qrUrlInput');
+      const textToCopy = input ? input.value : window.location.href;
+
+      function markSuccess() {
+        showToast('✅ 주소가 클립보드에 복사되었습니다.');
+        const btn = document.getElementById('qrCopyBtn');
+        const txt = document.getElementById('qrCopyBtnText');
+        if (btn && txt) {
+          btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+          btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+          txt.textContent = '복사완료!';
+          setTimeout(() => {
+            btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+            btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            txt.textContent = '주소 복사';
+          }, 2000);
+        }
+      }
+
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(textToCopy).then(markSuccess).catch(() => fallbackClipboardCopy(textToCopy, markSuccess));
+      } else {
+        fallbackClipboardCopy(textToCopy, markSuccess);
+      }
+    }
+
+    function fallbackClipboardCopy(text, onSuccess) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        ta.setAttribute('readonly', '');
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, 99999);
+        const successful = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (successful) onSuccess();
+        else showToast('주소가 선택되었습니다. 복사하기를 눌러주세요.');
+      } catch (err) {
+        showToast('주소가 선택되었습니다.');
+      }
+    }
+
+    function openQrUrlInNewTab() {
+      const input = document.getElementById('qrUrlInput');
+      const url = input ? input.value : window.location.href;
+      window.open(url, '_blank');
+      showToast('새 창에서 화면을 열었습니다.');
+    }
+
+    function saveCustomFirebaseUrl() {
+      const inp = document.getElementById('customFirebaseInput');
+      if (!inp) return;
+      let val = inp.value.trim();
+      if (!val) {
+        delete appData.firebaseDbUrl;
+        saveState();
+        renderQrContent();
+        showToast('기본 실시간 연동 모드로 설정되었습니다.');
+        return;
+      }
+      if (!val.startsWith('http://') && !val.startsWith('https://')) {
+        val = 'https://' + val;
+      }
+      appData.firebaseDbUrl = val.replace(/\/+$/, '');
+      saveState();
+      pullFirebaseData();
+      renderQrContent();
+      showToast('클라우드 DB 주소가 연결되었습니다.');
+    }
+
+    function saveCustomDomain() {
+      const inp = document.getElementById('customDomainInput');
+      if (!inp) return;
+      let val = inp.value.trim();
+      if (!val) {
+        delete appData.customDomain;
+        saveState();
+        renderQrContent();
+        showToast('기본 주소로 초기화되었습니다.');
+        return;
+      }
+      if (!val.startsWith('http://') && !val.startsWith('https://')) {
+        val = 'https://' + val;
+      }
+      appData.customDomain = val;
+      saveState();
+      renderQrContent();
+      showToast(`배포 도메인이 [${val}](으)로 설정되었습니다.`);
+    }
+
+    // ==================== PIN MODAL ====================
+    function openPinModal() {
+      document.getElementById('currentPinInput').value = '';
+      document.getElementById('newPinInput').value = '';
+      document.getElementById('pinModal').classList.remove('hidden');
+    }
+
+    function closePinModal() {
+      document.getElementById('pinModal').classList.add('hidden');
+    }
+
+    function saveNewPin() {
+      const cur = document.getElementById('currentPinInput').value.trim();
+      const next = document.getElementById('newPinInput').value.trim();
+
+      if (cur !== appData.adminPin) {
+        showToast('현재 암호가 일치하지 않습니다.');
+        return;
+      }
+      if (next.length < 4 || next.length > 6) {
+        showToast('새 암호는 4~6자리 숫자로 입력해주세요.');
+        return;
+      }
+
+      appData.adminPin = next;
+      saveState();
+      closePinModal();
+      showToast('관리자 암호가 성공적으로 변경되었습니다.');
+    }
+
+    // ==================== EDU INFO MODAL ====================
+    function openEduInfoModal() {
+      const sess = getActiveSession();
+      document.getElementById('editEduTitle').value = sess.title;
+      document.getElementById('editEduDate').value = sess.date;
+      document.getElementById('editEduPlace').value = sess.place;
+      document.getElementById('editEduInstructor').value = sess.instructor;
+      document.getElementById('eduInfoModal').classList.remove('hidden');
+    }
+
+    function closeEduInfoModal() {
+      document.getElementById('eduInfoModal').classList.add('hidden');
+    }
+
+    function saveEduInfo() {
+      const sess = getActiveSession();
+      sess.title = document.getElementById('editEduTitle').value.trim() || '교육 회차';
+      sess.date = document.getElementById('editEduDate').value || '2026-11-11';
+      sess.place = document.getElementById('editEduPlace').value.trim() || '원주TC / 2층교육장';
+      sess.instructor = document.getElementById('editEduInstructor').value.trim() || '안전관리팀';
+
+      saveState();
+      updateEduInfoDisplay();
+      closeEduInfoModal();
+      renderAll();
+      showToast(`[${sess.title}] 정보가 수정되었습니다.`);
+    }
+
+    // ==================== SHARE & REPORT MODAL ====================
+    function openShareModal() {
+      const g = appData.groups[activeTargetGroup];
+      const total = g.roster.length;
+      const work = g.roster.filter(r => r.status === 'work').length;
+      const off = g.roster.filter(r => r.status === 'off').length;
+      const signed = g.roster.filter(r => r.signed).length;
+      const unsigned = work - signed;
+      const pct = work > 0 ? Math.round((signed / work) * 100) : 0;
+      const unit = g.unit;
+      const term = g.workTerm;
+
+      const activeSess = getActiveSession();
+      const reportLines = [
+        `[원주TC 안전보건교육 서명 현황]`,
+        `■ 교육과정: ${activeSess.title}`,
+        `■ 일시/장소: ${activeSess.date} (${activeSess.place})`,
+        `■ 주관부서: ${activeSess.instructor}`,
+        `■ 대상직군: ${getRosterJobTitle(g.roster)}\n■ 주관: 원주TC`,
+        `━━━━━━━━━━━━━━━━━━`,
+        `• 총 등록 인원: ${total}${unit}`,
+        `• 당일 ${term} 대상: ${work}${unit} (휴무: ${off}${unit})`,
+        `• 서명 완료: ${signed}${unit} (${pct}%)`,
+        `• 미서명 대기: ${unsigned}${unit}`,
+        `━━━━━━━━━━━━━━━━━━`,
+        `※ 미서명 인원은 스마트폰 QR코드를 스캔하여 서명을 완료해주시기 바랍니다.`
+      ];
+
+      document.getElementById('shareReportText').value = reportLines.join('\n');
+      document.getElementById('shareModal').classList.remove('hidden');
+    }
+
+    function closeShareModal() {
+      document.getElementById('shareModal').classList.add('hidden');
+    }
+
+    function copyReportText() {
+      const ta = document.getElementById('shareReportText');
+      ta.select();
+      try {
+        navigator.clipboard.writeText(ta.value).then(() => {
+          showToast('보고 문구가 클립보드에 복사되었습니다.');
+        }).catch(() => {
+          document.execCommand('copy');
+          showToast('보고 문구가 복사되었습니다.');
+        });
+      } catch (e) {
+        document.execCommand('copy');
+        showToast('보고 문구가 복사되었습니다.');
+      }
+    }
+
+    // ==================== A4 PRINT ENGINE ====================
+    function triggerPrintA4() {
+      openPrintPreviewModal();
+    }
+
+    function openPrintPreviewModal() {
+      const activeSess = getActiveSession();
+      const g = appData.groups[activeTargetGroup];
+      const roster = g.roster;
+      const unit = g.unit;
+      const term = g.workTerm;
+      const isDriver = g.key === 'driver';
+
+      const container = document.getElementById('printPagesContainer');
+      const titleDesc = document.getElementById('printModalPageDesc');
+      if (!container) return;
+
+      const total = roster.length;
+      const signed = roster.filter(r => {
+        if (r.status !== 'work') return false;
+        if (r.signatures && r.signatures[activeSess.id] && r.signatures[activeSess.id].signed) return true;
+        if (activeSess.id === 'sess-1' && r.signed) return true;
+        return false;
+      }).length;
+      const off = roster.filter(r => r.status === 'off').length;
+
+      const itemsPerPage = isDriver ? 32 : 35;
+      const totalPages = Math.ceil(roster.length / itemsPerPage) || 1;
+
+      if (titleDesc) {
+        titleDesc.textContent = isDriver 
+          ? `설치기사는 총 ${totalPages}장으로 분할 인쇄됩니다.`
+          : `${g.name}는 총 ${totalPages}장으로 인쇄됩니다.`;
+      }
+
+      function buildPageHtml(pageItems, pageNum, totalPages) {
+        const rawTitle = String(activeSess.title || '교육').trim();
+        let roundLabel = '당일 정규';
+        let cleanCourseName = rawTitle;
+        const colonMatch = rawTitle.match(/^([^:：]+)[:：]\s*(.+)$/);
+        if (colonMatch) {
+          roundLabel = colonMatch[1].trim();
+          cleanCourseName = colonMatch[2].trim();
+        }
+        const isSafetyEdu = /안전|보건/.test(rawTitle);
+        const footerNote = isSafetyEdu
+          ? '※ 본 확인서는 산업안전보건법 제29조에 의거하여 실시된 안전보건교육 이수 확인 증빙 서류입니다.'
+          : `※ 본 확인서는 원주TC에서 실시된 [${cleanCourseName}] 참석 및 이수 확인 증빙 서류입니다.`;
+        let rows = '';
+        pageItems.forEach((item, i) => {
+          const globalIdx = (pageNum - 1) * itemsPerPage + i;
+          const isWork = item.status === 'work';
+          const sessSign = (item.signatures && item.signatures[activeSess.id]) || (activeSess.id === 'sess-1' ? { signed: item.signed, sigData: item.sigData } : { signed: false });
+          
+          let sigCell = '';
+          if (!isWork) {
+            sigCell = `<span style="color: #64748b; font-weight: bold; font-size: 8.5px;">휴무</span>`;
+          } else if (sessSign && sessSign.signed && sessSign.sigData) {
+            sigCell = `<img src="${sessSign.sigData}" style="max-height: 18px; max-width: 70px; margin: 0 auto; object-fit: contain;">`;
+          } else {
+            sigCell = `<span style="color: #cbd5e1; font-size: 8.5px;">미서명</span>`;
+          }
+
+          if (isDriver) {
+            rows += `
+              <tr style="border-bottom: 1px solid #000; height: 20px;">
+                <td style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 8.5px; font-family: monospace; width: 6%;">${globalIdx + 1}</td>
+                <td style="border: 1px solid #000; padding: 1px 4px; font-size: 8.5px; text-align: center; white-space: nowrap; width: 18%;">${item.cell}</td>
+                <td style="border: 1px solid #000; padding: 1px 4px; font-size: 9px; font-family: monospace; font-weight: 600; text-align: center; white-space: nowrap; width: 23%;">${item.carNo}</td>
+                <td style="border: 1px solid #000; padding: 1px 4px; font-size: 9.5px; font-weight: 800; text-align: center; white-space: nowrap; width: 17%;">${item.driverName}</td>
+                <td style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 9px; font-weight: bold; white-space: nowrap; width: 12%;">${isWork ? '<span style="color:#000;">가동</span>' : '<span style="color:#ef4444;">휴무</span>'}</td>
+                <td style="border: 1px solid #000; padding: 1px 4px; text-align: center; height: 20px; width: 24%;">${sigCell}</td>
+              </tr>
+            `;
+          } else {
+            // 운영스탭 & 보관하역(주간/야간) 공통: 직책 열 없이 깔끔하게 No | 소속 | 성명 | 상태 | 서명 5열 구성
+            const deptLabel = g.key === 'staff'
+              ? ((item.cell === '임원진') ? '임원진' : '스탭')
+              : (g.key === 'warehouse_day' ? '보관(주간)' : '보관(야간)');
+            rows += `
+              <tr style="border-bottom: 1px solid #000; height: 21px;">
+                <td style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 9px; font-family: monospace; width: 8%;">${globalIdx + 1}</td>
+                <td style="border: 1px solid #000; padding: 1px 4px; font-size: 9px; text-align: center; white-space: nowrap; width: 24%;">${deptLabel}</td>
+                <td style="border: 1px solid #000; padding: 1px 4px; font-size: 10px; font-weight: 800; text-align: center; white-space: nowrap; width: 28%;">${item.driverName}</td>
+                <td style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 9px; font-weight: bold; white-space: nowrap; width: 14%;">${isWork ? '<span style="color:#000;">근무</span>' : '<span style="color:#ef4444;">휴무</span>'}</td>
+                <td style="border: 1px solid #000; padding: 1px 4px; text-align: center; height: 21px; width: 26%;">${sigCell}</td>
+              </tr>
+            `;
+          }
+        });
+
+        const tableHeaders = isDriver ? `
+          <tr style="background-color: #f1f5f9; border-bottom: 1.5px solid #000; height: 20px;">
+            <th style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 8.5px; width: 6%;">No</th>
+            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 8.5px; white-space: nowrap; width: 18%;">소속</th>
+            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 8.5px; white-space: nowrap; width: 23%;">차량번호</th>
+            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 8.5px; white-space: nowrap; width: 17%;">성명</th>
+            <th style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 8.5px; white-space: nowrap; width: 12%;">상태</th>
+            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 8.5px; white-space: nowrap; width: 24%;">서명</th>
+          </tr>
+        ` : `
+          <tr style="background-color: #f1f5f9; border-bottom: 1.5px solid #000; height: 20px;">
+            <th style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 9px; width: 8%;">No</th>
+            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 9px; white-space: nowrap; width: 24%;">소속</th>
+            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 9px; white-space: nowrap; width: 28%;">성명</th>
+            <th style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 9px; white-space: nowrap; width: 14%;">상태</th>
+            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 9px; white-space: nowrap; width: 26%;">서명</th>
+          </tr>
+        `;
+
+        return `
+          <div class="print-page-sheet bg-white text-black rounded-lg shadow-xl p-2.5 sm:p-4 w-full max-w-[210mm] border border-slate-300 font-sans" style="min-height: 268mm; max-height: 272mm; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;">
+            <div>
+              <div class="text-center border-b-2 border-black pb-1.5 mb-2">
+                <div class="flex items-center justify-between text-[8px] text-gray-500 mb-0.5 font-bold">
+                  <span>원주TC 교육 이수 증빙 서식 (${roundLabel})</span>
+                  <span>[ ${pageNum} / ${totalPages} 페이지 ]</span>
+                </div>
+                <h1 class="font-black tracking-tight text-black" style="font-size: 14pt; line-height: 1.2; white-space: nowrap; margin-bottom: 2px;">
+                  ${cleanCourseName} 참석 및 서명 확인서
+                </h1>
+                <div class="flex items-center justify-between text-[8.5px] sm:text-[9.5px] font-semibold text-slate-800 border-t border-slate-300 pt-1 mt-1 tracking-tight">
+                  <span><strong>교육일시:</strong> ${activeSess.date} (${roundLabel})</span>
+                  <span><strong>교육장소:</strong> ${activeSess.place}</span>
+                  <span><strong>교육강사:</strong> ${activeSess.instructor}</span>
+                </div>
+              </div>
+
+              <div class="mb-1.5 flex items-center justify-between text-[8px] sm:text-[9px] font-bold px-0.5 text-slate-800 tracking-tight" style="letter-spacing: -0.3px;">
+                <span>직군: ${getRosterJobTitle(roster)} &nbsp;|&nbsp; 총원: ${total}${unit} &nbsp;|&nbsp; 서명완료: ${signed}${unit} &nbsp;|&nbsp; 당일휴무: ${off}${unit}</span>
+                <span>주관: 원주TC</span>
+              </div>
+
+              <table class="print-table" style="width: 100%; table-layout: fixed; border-collapse: collapse; border: 1.5px solid #000;">
+                <thead>
+                  ${tableHeaders}
+                </thead>
+                <tbody>
+                  ${rows}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="mt-2 pt-1 border-t border-gray-400 text-[8px] text-gray-600 flex justify-between items-center">
+              <span>${footerNote}</span>
+              <span>출력일시: 2026-11-11 · 원주TC</span>
+            </div>
+          </div>
+        `;
+      }
+
+      let pagesHtml = '';
+      for (let p = 1; p <= totalPages; p++) {
+        const sliceItems = roster.slice((p - 1) * itemsPerPage, p * itemsPerPage);
+        pagesHtml += buildPageHtml(sliceItems, p, totalPages);
+      }
+
+      container.innerHTML = pagesHtml;
+      document.getElementById('printPreviewModal').classList.remove('hidden');
+    }
+
+    function closePrintPreviewModal() {
+      document.getElementById('printPreviewModal').classList.add('hidden');
+    }
+
+    async function downloadPdfDirectly() {
+      const container = document.getElementById('printPagesContainer');
+      if (!container) return;
+      const sheets = Array.from(container.querySelectorAll('.print-page-sheet'));
+      if (sheets.length === 0) return;
+
+      showToast('📄 맞춤 PDF를 생성하고 있습니다...');
+
+      if (typeof html2pdf !== 'undefined') {
+        try {
+          const activeSess = getActiveSession();
+          const cleanTitle = (activeSess.title || '안전보건교육').replace(/[^a-zA-Z0-9가-힣]/g, '_');
+          const filename = `${cleanTitle}_서명부_원주TC.pdf`;
+
+          const opt = {
+            margin: 0,
+            filename: filename,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false, scrollY: 0 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+          };
+
+          let worker = html2pdf().set(opt).from(sheets[0]).toContainer().toCanvas().toPdf();
+
+          for (let i = 1; i < sheets.length; i++) {
+            worker = worker.get('pdf').then(pdf => {
+              pdf.addPage();
+            }).from(sheets[i]).toContainer().toCanvas().toPdf();
+          }
+
+          await worker.save();
+          showToast(`✅ 총 ${sheets.length}장 맞춤 PDF 저장이 완료되었습니다!`);
+        } catch (err) {
+          console.warn('Per-sheet PDF error, falling back:', err);
+          openStandalonePrintTab();
+        }
+      } else {
+        openStandalonePrintTab();
+      }
+    }
+
+    function executeNativePrint() {
+      openStandalonePrintTab();
+    }
+
+    function openStandalonePrintTab() {
+      const container = document.getElementById('printPagesContainer');
+      if (!container) return;
+      const content = container.innerHTML;
+      const activeSess = getActiveSession();
+
+      const printWin = window.open('', '_blank');
+      if (printWin) {
+        printWin.document.write(`<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${activeSess.title} 참석 및 서명 확인서</title>
+  <style>
+    @page { size: A4 portrait; margin: 6mm 8mm 6mm 8mm; }
+    html, body {
+      background: white !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      color: black !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .print-page-sheet {
+      page-break-after: always !important;
+      break-after: page !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: 272mm !important;
+      max-height: 272mm !important;
+      padding: 0 !important;
+      margin: 0 auto !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: space-between !important;
+      overflow: hidden !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    .print-page-sheet:last-child {
+      page-break-after: avoid !important;
+      break-after: avoid !important;
+    }
+    table { width: 100% !important; border-collapse: collapse !important; }
+  </style>
+</head>
+<body>
+  ${content}
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 350);
+    };
+  <\/script>
+</body>
+</html>`);
+        printWin.document.close();
+        showToast('🖨️ 인쇄 / PDF 저장 창을 열었습니다.');
+      } else {
+        try {
+          window.print();
+        } catch (e) {
+          showToast('상단의 [PDF 스마트폰 저장]을 눌러주세요.');
+        }
+      }
+    }
+
+    // ==================== TOAST NOTIFICATION ====================
+    let toastTimeout = null;
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.remove('opacity-0', 'translate-y-2');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', 'translate-y-2');
+      }, 2500);
+    }
+  </script>
+</body>
+</html>
