@@ -833,7 +833,7 @@
 
   <script>
     // ==================== APP STATE & OFFICIAL 11/11 ROSTER DATABASE ====================
-    const STORAGE_KEY = 'edu_sign_app_state_v52';
+    const STORAGE_KEY = 'edu_sign_app_state_v53';
 
     const DEFAULT_NETLIFY_URL = "https://coruscating-kulfi-9524ef.netlify.app";
 
@@ -978,83 +978,44 @@
       }
     };
 
-    const SESSION_STORAGE_KEY = 'edu_sign_active_tab_session_v52';
-
-    // 현재 접속이 '새로고침(reload)'인지, 아니면 '신규/재접속(navigate)'인지 정확히 판별!
-    function isPageReloadNavigation() {
-      try {
-        const navEntries = performance.getEntriesByType && performance.getEntriesByType('navigation');
-        if (navEntries && navEntries.length > 0) {
-          return navEntries[0].type === 'reload';
-        }
-        if (performance.navigation) {
-          return performance.navigation.type === 1;
-        }
-      } catch (e) {}
-      return false;
-    }
-
-    const IS_RELOAD_NAVIGATION = isPageReloadNavigation();
-    let hasAdminUploadedDispatchInThisSession = false;
+    const SESSION_STORAGE_KEY = 'edu_sign_active_tab_session_v53';
+    let hasAdminUploadedDispatchInThisSession = true;
 
     let appData = JSON.parse(JSON.stringify(defaultData));
     try {
-      // 1) 영구 설정(수기 수정 성명 마스터, 관리자 암호, 도메인, 스탭/보관 고정명단)은 localStorage에서 복원
       const savedPerm = localStorage.getItem(STORAGE_KEY);
       if (savedPerm) {
-        const parsedPerm = JSON.parse(savedPerm);
-        if (parsedPerm) {
-          if (parsedPerm.adminPin) appData.adminPin = parsedPerm.adminPin;
-          if (parsedPerm.customDomain) appData.customDomain = parsedPerm.customDomain;
-          if (parsedPerm.firebaseDbUrl) appData.firebaseDbUrl = parsedPerm.firebaseDbUrl;
-          if (parsedPerm.customDriverNames) {
-            appData.customDriverNames = parsedPerm.customDriverNames;
+        const parsed = JSON.parse(savedPerm);
+        if (parsed && parsed.groups && parsed.groups.driver) {
+          if (!parsed.groups.staff || !parsed.groups.staff.roster || parsed.groups.staff.roster.length === 0) {
+            parsed.groups.staff = defaultData.groups.staff;
+          }
+          if (!parsed.groups.warehouse_day || !parsed.groups.warehouse_day.roster || parsed.groups.warehouse_day.roster.length === 0) {
+            parsed.groups.warehouse_day = defaultData.groups.warehouse_day;
+          }
+          if (!parsed.groups.warehouse_night || !parsed.groups.warehouse_night.roster || parsed.groups.warehouse_night.roster.length === 0) {
+            parsed.groups.warehouse_night = defaultData.groups.warehouse_night;
+          }
+          // 지회영 이름 자동 보정 및 보관하역 직책 완전 제거
+          (parsed.groups.warehouse_day.roster || []).forEach(r => { r.role = ''; });
+          (parsed.groups.warehouse_night.roster || []).forEach(r => {
+            if (r.driverName === '지희영') r.driverName = '지회영';
+            r.role = '';
+          });
+          // 저장된 수기 수정 성명 마스터 사전(customDriverNames) 반영
+          if (parsed.customDriverNames) {
             [OFFICIAL_1111_DRIVERS_BACKUP, OFFICIAL_1112_DRIVERS].forEach(arr => {
               arr.forEach(d => {
-                if (parsedPerm.customDriverNames[d.carNo]) {
-                  d.driverName = parsedPerm.customDriverNames[d.carNo].driverName || d.driverName;
-                  d.cell = parsedPerm.customDriverNames[d.carNo].cell || d.cell;
+                if (parsed.customDriverNames[d.carNo]) {
+                  d.driverName = parsed.customDriverNames[d.carNo].driverName || d.driverName;
+                  d.cell = parsed.customDriverNames[d.carNo].cell || d.cell;
                 }
               });
             });
           }
-          if (parsedPerm.groups) {
-            ['staff', 'warehouse_day', 'warehouse_night'].forEach(gk => {
-              if (parsedPerm.groups[gk] && parsedPerm.groups[gk].customBaseRoster && parsedPerm.groups[gk].customBaseRoster.length > 0) {
-                appData.groups[gk].customBaseRoster = parsedPerm.groups[gk].customBaseRoster;
-                appData.groups[gk].roster = parsedPerm.groups[gk].customBaseRoster.map(m => ({ ...m, signed: false, sigData: null, sigTime: null, signatures: {} }));
-              }
-            });
-          }
+          appData = parsed;
         }
       }
-
-      // 2) 만약 '새로고침(F5 / 모바일 당겨서 새로고침)'인 경우에만 현재 탭(sessionStorage)의 배차표 및 서명 현황을 그대로 유지!
-      // 반대로 창을 닫았다가 다시 들어오거나 새 주소로 재접속(navigate)한 경우에는 sessionStorage를 초기화하여 가동현황 올린 파일이 무조건 0대(초기화 상태)로 시작!
-      if (IS_RELOAD_NAVIGATION) {
-        const savedSess = sessionStorage.getItem(SESSION_STORAGE_KEY);
-        if (savedSess) {
-          const parsedSess = JSON.parse(savedSess);
-          if (parsedSess && parsedSess.groups && parsedSess.groups.driver) {
-            appData = parsedSess;
-            if (appData.groups.driver.roster && appData.groups.driver.roster.length > 0) {
-              hasAdminUploadedDispatchInThisSession = true;
-            }
-          }
-        }
-      } else {
-        // 신규 접속 / 재접속 시에는 이전 세션의 배차표 캐시를 깨끗하게 비워서 무조건 초기화된 상태(0대)로 동작!
-        sessionStorage.removeItem(SESSION_STORAGE_KEY);
-        appData.groups.driver.uploadedFiles = [];
-        appData.groups.driver.roster = [];
-      }
-
-      // 지회영 이름 자동 보정 및 보관하역 직책 완전 제거
-      (appData.groups.warehouse_day.roster || []).forEach(r => { r.role = ''; });
-      (appData.groups.warehouse_night.roster || []).forEach(r => {
-        if (r.driverName === '지희영') r.driverName = '지회영';
-        r.role = '';
-      });
     } catch (e) {
       console.warn('Storage init error:', e);
     }
@@ -1067,7 +1028,7 @@
     let lastSavedRawState = '';
     const DEVICE_ID = 'dev-' + Math.random().toString(36).substring(2, 9);
 
-    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v52';
+    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v53';
     const MQTT_TOPIC_STATE = MQTT_TOPIC_BASE + '/state';     // Retained: 관리자가 설정한 명단(가동/휴무), 회차, 최신 인증코드
     const MQTT_TOPIC_SIG_PREFIX = MQTT_TOPIC_BASE + '/sig/'; // Retained per person: 기사님/참석자 서명 패킷
     const MQTT_TOPIC_CMD = MQTT_TOPIC_BASE + '/cmd';         // 실시간 명령 (기사 폰 접속 시 REQUEST_SYNC -> 관리자 폰 즉시 응답)
@@ -1170,18 +1131,24 @@
         const locG = appData.groups[k];
         if (!remG || !locG || !Array.isArray(remG.roster)) return;
 
-        // [핵심] 새로 접속했을 때 이전에 클라우드에 남아있던 오래된 배차표가 저절로 불러와지지 않도록 차단!
-        if (k === 'driver' && !hasAdminUploadedDispatchInThisSession && (!payload.isLiveAdminPush)) {
+        // [핵심] 관리자가 [초기화] 후 [업데이트 적용]을 눌러 명단을 비운 경우(remG.roster.length === 0),
+        // 카톡 링크나 다른 창으로 접속한 모든 화면(관리자/서명용 공통)에서도 즉시 0대(초기화 상태)로 반영!
+        if (k === 'driver' && remG.roster.length === 0) {
+          if (locG.roster.length > 0 || (locG.uploadedFiles && locG.uploadedFiles.length > 0)) {
+            locG.roster = [];
+            locG.uploadedFiles = [];
+            changed = true;
+          }
           return;
         }
-        if (remG.roster.length > 0 || (currentMode === 'worker' && remG.roster.length === 0)) {
+        if (remG.roster.length > 0) {
           const existingMap = {};
           (locG.roster || []).forEach(it => {
             const key = (k === 'driver') ? (it.carNo || it.driverName) : it.driverName;
             existingMap[key] = it;
           });
 
-          if (remG.uploadedFiles && remG.uploadedFiles.length > 0 && (!locG.uploadedFiles || locG.uploadedFiles.length === 0)) {
+          if (remG.uploadedFiles) {
             locG.uploadedFiles = remG.uploadedFiles;
           }
 
@@ -1502,7 +1469,7 @@
       if (icon) icon.classList.add('fa-spin');
 
       try {
-        const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && parsed.groups) {
@@ -1551,22 +1518,8 @@
     function saveState(broadcast = true, pushCloud = true) {
       try {
         const raw = JSON.stringify(appData);
-        // 1) 현재 접속 세션(새로고침 유지용)은 sessionStorage에 저장
+        localStorage.setItem(STORAGE_KEY, raw);
         sessionStorage.setItem(SESSION_STORAGE_KEY, raw);
-        // 2) 영구 설정(수기 수정 성명 사전, 암호, 도메인 등)은 localStorage에 저장하되 driver 배차표는 저장하지 않아 재접속 시 항상 0대로 초기화!
-        const permCopy = {
-          adminPin: appData.adminPin,
-          customDomain: appData.customDomain,
-          firebaseDbUrl: appData.firebaseDbUrl,
-          customDriverNames: appData.customDriverNames || {},
-          groups: {
-            staff: { customBaseRoster: appData.groups.staff.customBaseRoster },
-            warehouse_day: { customBaseRoster: appData.groups.warehouse_day.customBaseRoster },
-            warehouse_night: { customBaseRoster: appData.groups.warehouse_night.customBaseRoster }
-          }
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(permCopy));
-
         lastSavedRawState = raw;
         if (broadcast && syncChannel) {
           syncChannel.postMessage({ type: 'DATA_UPDATED', payload: raw, timestamp: Date.now() });
@@ -1581,13 +1534,12 @@
 
     function reloadFromStorage(incomingRaw) {
       try {
-        const raw = incomingRaw || sessionStorage.getItem(SESSION_STORAGE_KEY);
+        const raw = incomingRaw || localStorage.getItem(STORAGE_KEY);
         if (!raw || raw === lastSavedRawState) return;
         const parsed = JSON.parse(raw);
         if (parsed && parsed.groups) {
           appData = parsed;
           lastSavedRawState = raw;
-          sessionStorage.setItem(SESSION_STORAGE_KEY, raw);
           updateEduInfoDisplay();
           renderAll();
         }
@@ -1673,7 +1625,7 @@
     window.addEventListener('focus', reloadFromStorage);
 
     setInterval(() => {
-      const currentRaw = sessionStorage.getItem(SESSION_STORAGE_KEY) || '';
+      const currentRaw = localStorage.getItem(STORAGE_KEY) || '';
       if (currentRaw && currentRaw !== lastSavedRawState) {
         reloadFromStorage();
       }
@@ -2543,7 +2495,7 @@
     }
 
     // ==================== 1대 단말기 1회 서명 제한 (대리서명 원천 차단 엔진) ====================
-    const DEVICE_SIGN_LOCK_KEY = 'edu_device_sign_locks_v50';
+    const DEVICE_SIGN_LOCK_KEY = 'edu_device_sign_locks_v53';
 
     function getDeviceSignLocks() {
       try {
@@ -2984,11 +2936,12 @@
           if (summary) summary.textContent = '배차표 파일을 첨부하시면 인원이 자동 계산됩니다.';
           const offList = document.getElementById('detectedOffList');
           if (offList) offList.innerHTML = '';
-          saveState();
+          saveState(true, true);
           updateEduInfoDisplay();
           renderAll();
+          renderQrContent();
           renderUploadedChips();
-          showToast('🗑️ 배차표가 삭제되어 파일 첨부 대기 상태로 초기화되었습니다.');
+          showToast('🗑️ 배차표가 삭제되어 초기화 상태(0대)로 저장되었습니다.');
         }
       }
     }
@@ -3594,50 +3547,76 @@
         } else {
           g.roster = REAL_WAREHOUSE_NIGHT_MEMBERS.map(m => ({ ...m }));
         }
-        saveState();
+        saveState(true, true);
         fillCurrentRosterIntoTextarea();
         updateEduInfoDisplay();
         renderAll();
         showToast(`🔄 [${g.name}] 기본 고정 명단(${g.roster.length}${g.unit})으로 복원되었습니다.`);
       } else {
+        // [설치기사 초기화] 배차표 칩과 입력창 텍스트, 명단(roster)을 모두 깨끗하게 비움!
         g.roster = [];
-        if (uploadTargetGroup === 'driver') hasAdminUploadedDispatchInThisSession = false;
+        g.uploadedFiles = [];
         const ta = document.getElementById('pasteTextArea');
         if (ta) ta.value = '';
-        parsedUploadItems = null;
+        parsedUploadItems = { group: 'driver', roster: [] };
         const pills = document.getElementById('quickToggleRosterPills');
         if (pills) pills.innerHTML = '';
         const badge = document.getElementById('analysisBadge');
-        if (badge) badge.textContent = '파일 첨부 대기';
+        if (badge) badge.textContent = '초기화됨 (0대)';
         const summary = document.getElementById('analysisSummaryText');
-        if (summary) summary.textContent = '배차표 파일을 첨부하시면 인원이 자동 계산됩니다.';
+        if (summary) summary.textContent = '명단이 비워졌습니다. 하단 [업데이트 적용]을 누르면 초기화 상태(0대)로 저장됩니다.';
         const offList = document.getElementById('detectedOffList');
         if (offList) offList.innerHTML = '';
         renderUploadedChips();
-        saveState();
+        saveState(true, true);
         updateEduInfoDisplay();
         renderAll();
-        showToast('🗑️ 설치기사 배차표가 초기 대기 상태로 비워졌습니다.');
+        renderQrContent();
+        showToast('🗑️ 입력창과 배차표가 비워졌습니다. 하단 [업데이트 적용]을 누르면 초기화 상태로 확정됩니다.');
       }
     }
 
     function applyUploadedList() {
+      const g = appData.groups[uploadTargetGroup];
       const ta = document.getElementById('pasteTextArea');
       const text = ta ? ta.value.trim() : '';
+
+      // [핵심] 초기화 버튼을 눌러 입력창이 비어있는 상태에서 [명단 및 가동 상태 업데이트 적용]을 누르면,
+      // 명단(0대) 초기화 상태를 로컬 저장소와 클라우드 전체에 확정 저장하여 다음에 창을 다시 열거나 카톡으로 들어가도 설치기사 명단이 절대 보이지 않도록 동작!
       if (!text) {
-        closeUploadModal();
-        renderAll();
-        showToast('현재 상태가 적용되었습니다.');
-        return;
+        if (uploadTargetGroup === 'driver') {
+          g.roster = [];
+          g.uploadedFiles = [];
+          parsedUploadItems = null;
+          saveState(true, true);
+          activeTargetGroup = 'driver';
+          const sel = document.getElementById('targetGroupSelect');
+          if (sel) sel.value = 'driver';
+          updateEduInfoDisplay();
+          renderAll();
+          renderQrContent();
+          closeUploadModal();
+          showToast('✅ [설치기사] 명단이 초기화(0대) 상태로 저장되었습니다. 다시 접속해도 명단이 표시되지 않습니다.');
+          return;
+        } else {
+          closeUploadModal();
+          renderAll();
+          showToast('현재 고정 명단 상태가 적용되었습니다.');
+          return;
+        }
       }
+
       parsePastedText(false);
       if (parsedUploadItems && parsedUploadItems.roster && parsedUploadItems.roster.length > 0) {
-        const g = appData.groups[uploadTargetGroup];
         const workCount = parsedUploadItems.roster.filter(r => r.status === 'work').length;
         const offCount = parsedUploadItems.roster.filter(r => r.status === 'off').length;
+        if (!g.uploadedFiles || g.uploadedFiles.length === 0) {
+          registerUploadedChip(`배차표(${g.workTerm}${workCount}/휴무${offCount})`, text);
+        }
         autoCommitParsedRoster();
+        renderQrContent();
         closeUploadModal();
-        showToast(`✅ [${g.name}] 수기 수정 및 ${g.workTerm} ${workCount}${g.unit} / 휴무 ${offCount}${g.unit} 상태가 영구 반영되었습니다!`);
+        showToast(`✅ [${g.name}] ${g.workTerm} ${workCount}${g.unit} / 휴무 ${offCount}${g.unit} 상태가 저장 및 반영되었습니다!`);
       } else {
         showToast('업데이트할 명단이 없습니다.');
       }
