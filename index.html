@@ -251,7 +251,7 @@
       <!-- Progress bar in Blue Card -->
       <div class="space-y-1 pt-0.5">
         <div class="flex items-center justify-between text-[11px] text-blue-100 font-bold">
-          <span id="blueCardProgressLabel">가동 대상자 서명 진행률 (미서명: 54대)</span>
+          <span id="blueCardProgressLabel">가동 대상자 서명 진행률 (미서명: 0대)</span>
           <span id="blueCardProgressPercent" class="text-amber-300 font-black">0%</span>
         </div>
         <div class="w-full h-2 bg-black/20 rounded-full overflow-hidden p-0.5">
@@ -305,16 +305,16 @@
     <section class="space-y-1.5 no-print">
       <div class="flex items-center gap-1 overflow-x-auto no-scrollbar pb-0.5">
         <button type="button" onclick="setStatusFilter('all')" data-status="all" class="status-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all bg-slate-100 text-slate-600 shrink-0">
-          전체 (<span id="countAll">64</span>)
+          전체 (<span id="countAll">0</span>)
         </button>
         <button type="button" onclick="setStatusFilter('work')" data-status="work" class="status-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all bg-blue-600 text-white shadow-xs shrink-0">
-          <span id="statusWorkTabLabel">가동</span> (<span id="countWork">54</span>)
+          <span id="statusWorkTabLabel">가동</span> (<span id="countWork">0</span>)
         </button>
         <button type="button" onclick="setStatusFilter('off')" data-status="off" class="status-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all bg-slate-100 text-slate-600 shrink-0">
-          휴무 (<span id="countOff">10</span>)
+          휴무 (<span id="countOff">0</span>)
         </button>
         <button type="button" onclick="setStatusFilter('unsigned')" data-status="unsigned" class="status-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all bg-slate-100 text-slate-600 shrink-0">
-          미서명 (<span id="countUnsigned">54</span>)
+          미서명 (<span id="countUnsigned">0</span>)
         </button>
         <button type="button" onclick="setStatusFilter('signed')" data-status="signed" class="status-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all bg-slate-100 text-slate-600 shrink-0">
           완료 (<span id="countSigned">0</span>)
@@ -324,7 +324,7 @@
       <!-- Result Count Line -->
       <div class="flex items-center justify-between px-1 text-[11px] text-slate-500 font-medium">
         <div>
-          조회 결과 <span id="filteredCountText" class="font-bold text-blue-600">54대</span>
+          조회 결과 <span id="filteredCountText" class="font-bold text-blue-600">0대</span>
         </div>
         <div id="activeFilterDesc" class="text-slate-400 text-[10px]">
           가동자 기준
@@ -657,7 +657,7 @@
             <div>
               <p class="text-[10px] text-slate-500 mb-1">1. 배포된 Netlify 주소 (QR코드 기본 연결 주소):</p>
               <div class="flex gap-1">
-                <input type="text" id="customDomainInput" placeholder="https://glittering-fairy-c50df8.netlify.app" class="flex-1 text-xs font-mono bg-white border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                <input type="text" id="customDomainInput" placeholder="https://coruscating-kulfi-9524ef.netlify.app" class="flex-1 text-xs font-mono bg-white border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500">
                 <button type="button" onclick="saveCustomDomain()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg shrink-0">저장</button>
               </div>
             </div>
@@ -833,9 +833,9 @@
 
   <script>
     // ==================== APP STATE & OFFICIAL 11/11 ROSTER DATABASE ====================
-    const STORAGE_KEY = 'edu_sign_app_state_v51';
+    const STORAGE_KEY = 'edu_sign_app_state_v52';
 
-    const DEFAULT_NETLIFY_URL = "https://glittering-fairy-c50df8.netlify.app";
+    const DEFAULT_NETLIFY_URL = "https://coruscating-kulfi-9524ef.netlify.app";
 
     const REAL_STAFF_MEMBERS = [
       { name: '곽준호', role: '대표이사' },
@@ -978,7 +978,7 @@
       }
     };
 
-    const SESSION_STORAGE_KEY = 'edu_sign_active_tab_session_v51';
+    const SESSION_STORAGE_KEY = 'edu_sign_active_tab_session_v52';
 
     // 현재 접속이 '새로고침(reload)'인지, 아니면 '신규/재접속(navigate)'인지 정확히 판별!
     function isPageReloadNavigation() {
@@ -1067,7 +1067,7 @@
     let lastSavedRawState = '';
     const DEVICE_ID = 'dev-' + Math.random().toString(36).substring(2, 9);
 
-    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v48';
+    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v52';
     const MQTT_TOPIC_STATE = MQTT_TOPIC_BASE + '/state';     // Retained: 관리자가 설정한 명단(가동/휴무), 회차, 최신 인증코드
     const MQTT_TOPIC_SIG_PREFIX = MQTT_TOPIC_BASE + '/sig/'; // Retained per person: 기사님/참석자 서명 패킷
     const MQTT_TOPIC_CMD = MQTT_TOPIC_BASE + '/cmd';         // 실시간 명령 (기사 폰 접속 시 REQUEST_SYNC -> 관리자 폰 즉시 응답)
@@ -1125,6 +1125,7 @@
       return {
         sender: DEVICE_ID,
         ts: Date.now(),
+        isLiveAdminPush: hasAdminUploadedDispatchInThisSession,
         authCode: String(appData.authCode || '7429').trim(),
         activeSessionId: appData.activeSessionId || 'sess-1',
         activeTargetGroup: activeTargetGroup || 'driver',
@@ -1169,9 +1170,8 @@
         const locG = appData.groups[k];
         if (!remG || !locG || !Array.isArray(remG.roster)) return;
 
-        // [핵심] 관리자가 새로 접속해서 아직 가동현황 배차표를 올리지 않은 초기 상태(0대)일 때는,
-        // 이전에 클라우드에 남아있던 옛날 배차표가 저절로 불러와지지 않도록 차단! (오직 기사님 서명용 모드이거나 관리자가 배차표를 올린 후에만 병합)
-        if (k === 'driver' && currentMode === 'admin' && !hasAdminUploadedDispatchInThisSession) {
+        // [핵심] 새로 접속했을 때 이전에 클라우드에 남아있던 오래된 배차표가 저절로 불러와지지 않도록 차단!
+        if (k === 'driver' && !hasAdminUploadedDispatchInThisSession && (!payload.isLiveAdminPush)) {
           return;
         }
         if (remG.roster.length > 0 || (currentMode === 'worker' && remG.roster.length === 0)) {
@@ -1346,6 +1346,7 @@
       const pkt = {
         sender: DEVICE_ID,
         ts: Date.now(),
+        isLiveAdminPush: hasAdminUploadedDispatchInThisSession,
         action: action,
         groupKey: groupKey,
         sessionId: sessionId,
@@ -1636,9 +1637,9 @@
       appData.activeSessionId = sessParam;
     }
 
-    // [중요] 기사님이 QR을 찍고 들어왔을 때(mode=worker), 기사님 폰에 아직 운전기사 배차표가 없다면
-    // QR 파라미터(preset=1111 또는 1112) 또는 기본 64명 명단을 즉시 세팅하여 0초 만에 본인 차량 검색/서명이 가능하도록 보장!
-    if (currentMode === 'worker' && (!appData.groups.driver.roster || appData.groups.driver.roster.length === 0)) {
+    // [핵심] QR코드에 관리자가 명시적으로 업로드한 배차표 파라미터(preset=1111 또는 1112)가 있을 때만 기사님 화면에 세팅!
+    // 일반 링크(coruscating-kulfi-9524ef.netlify.app)를 클릭해 접속했을 때는 서명용/관리자용 모두 무조건 0대(초기화 상태)로 시작!
+    if (currentMode === 'worker' && (presetParam === '1111' || presetParam === '1112')) {
       const baseDrivers = (presetParam === '1112') ? OFFICIAL_1112_DRIVERS : OFFICIAL_1111_DRIVERS_BACKUP;
       appData.groups.driver.roster = baseDrivers.map(d => ({
         ...d,
@@ -3706,12 +3707,13 @@
       const baseUrl = getBaseUrl();
 
       const activeSess = getActiveSession();
-      const driverOffCnt = (appData.groups.driver && appData.groups.driver.roster) ? appData.groups.driver.roster.filter(r => r.status === 'off').length : 10;
-      const presetCode = driverOffCnt === 15 ? '1112' : '1111';
+      const driverRoster = (appData.groups.driver && appData.groups.driver.roster) ? appData.groups.driver.roster : [];
+      const driverOffCnt = driverRoster.filter(r => r.status === 'off').length;
+      const presetCode = driverRoster.length > 0 ? (driverOffCnt === 15 ? '1112' : '1111') : '';
 
       let liveUrl = baseUrl;
       if (isWorker) {
-        liveUrl += `?mode=worker&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}&preset=${presetCode}&auth=${currentPin}`;
+        liveUrl += `?mode=worker&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}${presetCode ? '&preset=' + presetCode : ''}&auth=${currentPin}`;
       } else {
         liveUrl += `?mode=admin&group=${activeTargetGroup}`;
       }
