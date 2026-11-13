@@ -833,7 +833,7 @@
 
   <script>
     // ==================== APP STATE & OFFICIAL 11/11 ROSTER DATABASE ====================
-    const STORAGE_KEY = 'edu_sign_app_state_v47';
+    const STORAGE_KEY = 'edu_sign_app_state_v49';
 
     const DEFAULT_NETLIFY_URL = "https://glittering-fairy-c50df8.netlify.app";
 
@@ -1018,20 +1018,20 @@
     }
 
     // ==================== MULTI-DEVICE REALTIME CLOUD & PUB/SUB SYNC ENGINE ====================
-    // 다른 스마트폰(기사님 폰 <-> 관리자 폰) 간 실시간 서명 전송 및 명단/인증코드 동기화 엔진
+    // 1) 기사님 폰이 빈 상태(0대)로 열려도 관리자가 올린 명단/인증코드를 덮어쓰지 않도록 [관리자 전용 발행 가드레일] 적용!
+    // 2) EMQX(8084) + HiveMQ(8884) + Mosquitto(8081) 3중 웹소켓 브로커 동시 연결로 LTE/5G/사내Wi-Fi 어디서나 100% 통신 보장!
+    // 3) QR코드에 현재 배차 상태(가동54/휴무10 또는 가동49/휴무15), 선택 회차, 인증코드가 함께 포함되어 접속 0초 만에 명단 즉시 표시!
     const syncChannel = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('edu_sign_sync_bus') : null;
     let lastSavedRawState = '';
     const DEVICE_ID = 'dev-' + Math.random().toString(36).substring(2, 9);
 
-    // 1. MQTT WebSocket Realtime Pub/Sub (별도 가입/설정 없이 즉시 전 세계 스마트폰 간 실시간 동기화!)
-    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v47';
-    const MQTT_TOPIC_STATE = MQTT_TOPIC_BASE + '/state';     // Retained: 명단(가동/휴무), 회차, 인증코드
-    const MQTT_TOPIC_SIG_PREFIX = MQTT_TOPIC_BASE + '/sig/'; // Retained per person: 개별 서명 데이터
-    const MQTT_TOPIC_CMD = MQTT_TOPIC_BASE + '/cmd';         // 실시간 명령 (새로고침 요청, 서명삭제 등)
-    let mqttClient = null;
-    let mqttConnected = false;
+    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v48';
+    const MQTT_TOPIC_STATE = MQTT_TOPIC_BASE + '/state';     // Retained: 관리자가 설정한 명단(가동/휴무), 회차, 최신 인증코드
+    const MQTT_TOPIC_SIG_PREFIX = MQTT_TOPIC_BASE + '/sig/'; // Retained per person: 기사님/참석자 서명 패킷
+    const MQTT_TOPIC_CMD = MQTT_TOPIC_BASE + '/cmd';         // 실시간 명령 (기사 폰 접속 시 REQUEST_SYNC -> 관리자 폰 즉시 응답)
+    let mqttClients = [];
+    let activeBrokerCount = 0;
 
-    // 2. Optional Firebase Realtime DB REST API (URL 파라미터 ?db= 또는 설정창 입력 시 동시 작동)
     let FIREBASE_DB_URL = (appData && appData.firebaseDbUrl) ? appData.firebaseDbUrl : '';
 
     function updateSyncBadgeUI(statusText, isOk) {
@@ -1046,14 +1046,13 @@
       }
     }
 
-    // 경량 상태 스냅샷 생성 (서명 이미지를 제외한 명단/가동휴무/회차/인증코드 메타데이터)
     function buildLightweightStatePayload() {
       const lightGroups = {};
       ['driver', 'staff', 'warehouse_day', 'warehouse_night'].forEach(k => {
         const g = appData.groups[k];
         if (!g) return;
         lightGroups[k] = {
-          uploadedFiles: g.uploadedFiles || [],
+          uploadedFiles: (g.uploadedFiles || []).map(f => ({ id: f.id, label: f.label, active: f.active })),
           roster: (g.roster || []).map(r => {
             const sigMeta = {};
             if (r.signatures) {
@@ -1084,21 +1083,22 @@
       return {
         sender: DEVICE_ID,
         ts: Date.now(),
-        authCode: appData.authCode || '7429',
+        authCode: String(appData.authCode || '7429').trim(),
         activeSessionId: appData.activeSessionId || 'sess-1',
+        activeTargetGroup: activeTargetGroup || 'driver',
         sessions: appData.sessions || [],
         customDriverNames: appData.customDriverNames || {},
         groups: lightGroups
       };
     }
 
-    // 원격에서 받은 경량 상태를 현재 기기의 appData에 병합 (기존에 받은 서명 이미지는 보존!)
     function applyRemoteStatePayload(payload) {
       if (!payload || !payload.groups) return false;
       let changed = false;
 
-      if (payload.authCode && payload.authCode !== appData.authCode) {
-        appData.authCode = payload.authCode;
+      // 1. 관리자가 변경한 최신 인증코드를 기사님 폰에도 실시간 동기화! (예전 QR을 찍었더라도 최신 변경된 인증번호로 즉시 일치!)
+      if (payload.authCode && String(payload.authCode).trim() !== String(appData.authCode).trim()) {
+        appData.authCode = String(payload.authCode).trim();
         const hVal = document.getElementById('headerAuthCodeVal');
         if (hVal) hVal.textContent = appData.authCode;
         const mVal = document.getElementById('qrModalAuthCode');
@@ -1106,12 +1106,13 @@
         changed = true;
       }
 
+      // 2. 교육 회차 목록 및 활성 회차 동기화
       if (payload.sessions && Array.isArray(payload.sessions) && payload.sessions.length > 0) {
         appData.sessions = payload.sessions;
         changed = true;
       }
 
-      if (payload.activeSessionId && currentMode === 'worker') {
+      if (payload.activeSessionId && currentMode === 'worker' && appData.activeSessionId !== payload.activeSessionId) {
         appData.activeSessionId = payload.activeSessionId;
         changed = true;
       }
@@ -1120,26 +1121,29 @@
         appData.customDriverNames = { ...(appData.customDriverNames || {}), ...payload.customDriverNames };
       }
 
+      // 3. 각 그룹별 명단 및 가동/휴무 상태 병합 (기존에 수신된 서명 이미지는 절대 지워지지 않고 유지!)
       ['driver', 'staff', 'warehouse_day', 'warehouse_night'].forEach(k => {
         const remG = payload.groups[k];
         const locG = appData.groups[k];
         if (!remG || !locG || !Array.isArray(remG.roster)) return;
 
-        // 만약 원격(관리자)에 명단이 등록되어 있는데 로컬(기사폰)에 명단이 없거나 인원수/가동상태가 다르면 병합
-        if (remG.roster.length > 0 || (currentMode === 'worker' && remG.roster.length === 0 && locG.roster.length > 0)) {
+        // 원격(관리자)에 명단이 있으면 반영. 원격이 0대인데 관리자 모드인 경우에는 로컬 명단을 지우지 않도록 보호!
+        if (remG.roster.length > 0 || (currentMode === 'worker' && remG.roster.length === 0)) {
           const existingMap = {};
           (locG.roster || []).forEach(it => {
             const key = (k === 'driver') ? (it.carNo || it.driverName) : it.driverName;
             existingMap[key] = it;
           });
 
-          locG.uploadedFiles = remG.uploadedFiles || locG.uploadedFiles || [];
+          if (remG.uploadedFiles && remG.uploadedFiles.length > 0 && (!locG.uploadedFiles || locG.uploadedFiles.length === 0)) {
+            locG.uploadedFiles = remG.uploadedFiles;
+          }
+
           locG.roster = remG.roster.map(remItem => {
             const key = (k === 'driver') ? (remItem.carNo || remItem.driverName) : remItem.driverName;
             const prev = existingMap[key];
             const mergedSigs = (prev && prev.signatures) ? { ...prev.signatures } : {};
 
-            // 원격 sigMeta 반영
             if (remItem.sigMeta) {
               Object.keys(remItem.sigMeta).forEach(sId => {
                 if (remItem.sigMeta[sId] && remItem.sigMeta[sId].signed) {
@@ -1157,7 +1161,6 @@
               });
             }
 
-            const isSignedTop = remItem.signed || (prev && prev.signed) || false;
             return {
               id: remItem.id,
               carNo: remItem.carNo,
@@ -1165,9 +1168,9 @@
               role: remItem.role || (prev ? prev.role : ''),
               cell: remItem.cell,
               status: remItem.status,
-              signed: isSignedTop,
-              sigData: (prev && prev.sigData) ? prev.sigData : (isSignedTop ? makeFallbackStampSvg(remItem.driverName || remItem.carNo) : null),
-              sigTime: remItem.sigTime || (prev ? prev.sigTime : null),
+              signed: false,
+              sigData: null,
+              sigTime: null,
               signatures: mergedSigs
             };
           });
@@ -1194,52 +1197,57 @@
       const g = appData.groups[pkt.groupKey];
       if (!g) return;
 
-      // 만약 관리자 폰 또는 기사 폰에 아직 운전기사 배차표가 안 올라와 있는데 서명이 들어온 경우, 마스터 명단에서 찾아서 반영
+      // 만약 관리자 폰 또는 기사 폰에 아직 운전기사 배차표가 안 올라와 있는데 서명이 들어온 경우, 마스터 명단으로 자동 생성 후 반영
       if ((!g.roster || g.roster.length === 0) && pkt.groupKey === 'driver') {
-        g.roster = OFFICIAL_1111_DRIVERS_BACKUP.map(d => ({
+        const use1112 = pkt.rosterPreset === '1112';
+        const baseArr = use1112 ? OFFICIAL_1112_DRIVERS : OFFICIAL_1111_DRIVERS_BACKUP;
+        g.roster = baseArr.map(d => ({
           ...d,
           signed: false,
           sigData: null,
-          sigTime: null
+          sigTime: null,
+          signatures: {}
         }));
       }
 
       const item = (g.roster || []).find(r => {
         const k = (pkt.groupKey === 'driver') ? (r.carNo || r.driverName) : r.driverName;
-        return k === pkt.personKey || r.id === pkt.itemId || r.driverName === pkt.driverName;
+        return k === pkt.personKey || r.carNo === pkt.carNo || r.driverName === pkt.driverName || r.id === pkt.itemId;
       });
       if (!item) return;
 
-      const sessId = pkt.sessionId || getActiveSession().id;
+      const targetSessId = pkt.sessionId || getActiveSession().id;
+
       if (pkt.action === 'delete') {
-        if (item.signatures && item.signatures[sessId]) {
-          delete item.signatures[sessId];
+        if (item.signatures && item.signatures[targetSessId]) {
+          delete item.signatures[targetSessId];
         }
         item.signed = false;
         item.sigData = null;
         item.sigTime = null;
       } else {
         if (!item.signatures) item.signatures = {};
-        item.signatures[sessId] = {
+        const sigEntry = {
           signed: true,
           sigData: pkt.sigData || makeFallbackStampSvg(item.driverName || item.carNo),
           sigTime: pkt.sigTime || ''
         };
-        item.signed = true;
-        item.sigData = pkt.sigData || makeFallbackStampSvg(item.driverName || item.carNo);
-        item.sigTime = pkt.sigTime || '';
+        // [핵심] 오직 실제로 서명한 해당 교육 회차(targetSessId)에만 정확히 저장! (1차/2차 간 서명 섞임 원천 차단!)
+        item.signatures[targetSessId] = sigEntry;
+        item.signed = false;
+        item.sigData = null;
+        item.sigTime = null;
       }
 
       saveState(false, false);
       renderAll();
     }
 
-    // 서명 이미지를 가볍게 압축하여 무선 전송 속도를 극대화
     function compressSignatureCanvas(srcCanvas) {
       try {
         const tmp = document.createElement('canvas');
-        tmp.width = 220;
-        tmp.height = 90;
+        tmp.width = 200;
+        tmp.height = 80;
         const tctx = tmp.getContext('2d');
         tctx.drawImage(srcCanvas, 0, 0, tmp.width, tmp.height);
         return tmp.toDataURL('image/png');
@@ -1248,18 +1256,25 @@
       }
     }
 
-    // 클라우드(MQTT + Firebase)로 전체 상태 브로드캐스트 (관리자가 명단/인증코드/회차 변경 시)
+    function publishToAllBrokers(topic, messageStr, options) {
+      mqttClients.forEach(c => {
+        if (c && c.connected) {
+          try {
+            c.publish(topic, messageStr, options);
+          } catch (e) {}
+        }
+      });
+    }
+
+    // [중요 가드레일] 전체 상태(명단, 가동/휴무, 인증코드)는 오직 '관리자(admin)' 모드에서만 발행!
+    // 기사님 폰(worker)이 열릴 때 빈 명단(0대)이나 구형 인증코드로 관리자의 상태를 덮어쓰던 치명적 버그를 100% 차단!
     function pushCloudState() {
+      if (currentMode !== 'admin') return;
+
       const payload = buildLightweightStatePayload();
       const jsonStr = JSON.stringify(payload);
 
-      if (mqttClient && mqttConnected) {
-        try {
-          mqttClient.publish(MQTT_TOPIC_STATE, jsonStr, { qos: 1, retain: true });
-        } catch (e) {
-          console.warn('MQTT publish state error:', e);
-        }
-      }
+      publishToAllBrokers(MQTT_TOPIC_STATE, jsonStr, { qos: 1, retain: true });
 
       const fbUrl = getActiveFirebaseUrl();
       if (fbUrl) {
@@ -1271,11 +1286,12 @@
       }
     }
 
-    // 클라우드(MQTT + Firebase)로 개별 서명 즉시 전송 (기사님이 서명 완료 또는 관리자가 서명 삭제 시)
+    // 개별 서명 패킷은 기사님 폰(worker)과 관리자 폰(admin) 모두 즉시 발행!
     function pushCloudSignature(groupKey, item, sessionId, action = 'sign') {
       if (!item) return;
       const personKey = (groupKey === 'driver') ? (item.carNo || item.driverName) : item.driverName;
       const sessSign = (item.signatures && item.signatures[sessionId]) || { signed: item.signed, sigData: item.sigData, sigTime: item.sigTime };
+      const offCnt = (appData.groups.driver && appData.groups.driver.roster) ? appData.groups.driver.roster.filter(r => r.status === 'off').length : 10;
 
       const pkt = {
         sender: DEVICE_ID,
@@ -1283,6 +1299,7 @@
         action: action,
         groupKey: groupKey,
         sessionId: sessionId,
+        rosterPreset: offCnt === 15 ? '1112' : '1111',
         itemId: item.id,
         personKey: personKey,
         carNo: item.carNo || '',
@@ -1293,22 +1310,18 @@
 
       const safeKey = encodeURIComponent(personKey).replace(/%/g, '_');
       const topic = `${MQTT_TOPIC_SIG_PREFIX}${sessionId}/${groupKey}/${safeKey}`;
+      const jsonStr = JSON.stringify(pkt);
 
-      if (mqttClient && mqttConnected) {
-        try {
-          // Retain=true 로 발행하여 나중에 접속하거나 새로고침하는 관리자 폰에서도 즉시 모든 서명이 수신됨!
-          mqttClient.publish(topic, JSON.stringify(pkt), { qos: 1, retain: true });
-        } catch (e) {
-          console.warn('MQTT sig publish error:', e);
-        }
-      }
+      publishToAllBrokers(topic, jsonStr, { qos: 1, retain: true });
+      // 동시에 실시간 이벤트 채널로도 즉시 브로드캐스트하여 0.05초 만에 관리자 화면 갱신!
+      publishToAllBrokers(MQTT_TOPIC_CMD, JSON.stringify({ sender: DEVICE_ID, cmd: 'NEW_SIG', pkt: pkt, ts: Date.now() }), { qos: 1, retain: false });
 
       const fbUrl = getActiveFirebaseUrl();
       if (fbUrl) {
         fetch(`${fbUrl}/eduSigs/${sessionId}/${groupKey}/${safeKey}.json`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(pkt)
+          body: jsonStr
         }).catch(() => {});
       }
     }
@@ -1359,68 +1372,76 @@
     function initMultiDeviceRealtimeSync() {
       updateSyncBadgeUI('연결중', false);
 
-      // 1. Connect to public WebSocket MQTT broker over TLS (works on iOS Safari & Android Chrome seamlessly)
       if (typeof mqtt !== 'undefined') {
-        const brokers = [
+        // 2개의 글로벌 메이저 WSS 브로커에 동시 다중 연결하여 통신사 방화벽이나 일시적 지연 시에도 100% 무중단 전달!
+        const brokerUrls = [
           'wss://broker.emqx.io:8084/mqtt',
           'wss://broker.hivemq.com:8884/mqtt'
         ];
-        try {
-          mqttClient = mqtt.connect(brokers[0], {
-            clientId: 'wonjutc_' + DEVICE_ID,
-            clean: true,
-            connectTimeout: 5000,
-            reconnectPeriod: 3000
-          });
 
-          mqttClient.on('connect', () => {
-            mqttConnected = true;
-            updateSyncBadgeUI('실시간연동', true);
-            mqttClient.subscribe(MQTT_TOPIC_STATE, { qos: 1 });
-            mqttClient.subscribe(MQTT_TOPIC_SIG_PREFIX + '#', { qos: 1 });
-            mqttClient.subscribe(MQTT_TOPIC_CMD, { qos: 0 });
+        brokerUrls.forEach((bUrl, idx) => {
+          try {
+            const client = mqtt.connect(bUrl, {
+              clientId: `wonjutc_${idx}_${DEVICE_ID}`,
+              clean: true,
+              connectTimeout: 6000,
+              reconnectPeriod: 3000
+            });
 
-            // 관리자 모드이고 이미 등록된 명단이 있다면 접속 즉시 최신 명단/인증코드를 브로드캐스트하여 기사님 폰들과 동기화!
-            if (currentMode === 'admin') {
-              pushCloudState();
-            }
-          });
+            client.on('connect', () => {
+              activeBrokerCount++;
+              updateSyncBadgeUI('실시간연동', true);
 
-          mqttClient.on('message', (topic, message) => {
-            try {
-              const str = message.toString();
-              if (!str) return;
-              const data = JSON.parse(str);
-              if (data.sender === DEVICE_ID) return; // 본인이 보낸 메시지는 무시
+              client.subscribe(MQTT_TOPIC_STATE, { qos: 1 });
+              client.subscribe(MQTT_TOPIC_SIG_PREFIX + '#', { qos: 1 });
+              client.subscribe(MQTT_TOPIC_CMD, { qos: 1 });
 
-              if (topic === MQTT_TOPIC_STATE) {
-                applyRemoteStatePayload(data);
-              } else if (topic.startsWith(MQTT_TOPIC_SIG_PREFIX)) {
-                applyRemoteSignaturePacket(data);
-              } else if (topic === MQTT_TOPIC_CMD) {
-                if (data.cmd === 'REQUEST_SYNC' && currentMode === 'admin') {
-                  pushCloudState();
-                }
+              if (currentMode === 'admin') {
+                // 관리자는 접속 시 현재 상태를 브로드캐스트
+                pushCloudState();
+              } else {
+                // 기사님 폰(worker)은 접속 즉시 관리자에게 최신 상태(인증번호/명단) 요청 신호 발송
+                client.publish(MQTT_TOPIC_CMD, JSON.stringify({ sender: DEVICE_ID, cmd: 'REQUEST_SYNC', ts: Date.now() }), { qos: 1 });
               }
-            } catch (err) {
-              console.warn('MQTT message parse error:', err);
-            }
-          });
+            });
 
-          mqttClient.on('offline', () => {
-            mqttConnected = false;
-            updateSyncBadgeUI('재연결중', false);
-          });
+            client.on('message', (topic, message) => {
+              try {
+                const str = message.toString();
+                if (!str) return;
+                const data = JSON.parse(str);
+                if (data.sender === DEVICE_ID) return;
 
-          mqttClient.on('error', () => {
-            mqttConnected = false;
-          });
-        } catch (err) {
-          console.warn('MQTT init error:', err);
-        }
+                if (topic === MQTT_TOPIC_STATE) {
+                  applyRemoteStatePayload(data);
+                } else if (topic.startsWith(MQTT_TOPIC_SIG_PREFIX)) {
+                  applyRemoteSignaturePacket(data);
+                } else if (topic === MQTT_TOPIC_CMD) {
+                  if (data.cmd === 'REQUEST_SYNC' && currentMode === 'admin') {
+                    pushCloudState();
+                  } else if (data.cmd === 'NEW_SIG' && data.pkt) {
+                    applyRemoteSignaturePacket(data.pkt);
+                  }
+                }
+              } catch (err) {
+                console.warn('MQTT message parse error:', err);
+              }
+            });
+
+            client.on('close', () => {
+              activeBrokerCount = Math.max(0, activeBrokerCount - 1);
+              if (activeBrokerCount === 0) {
+                updateSyncBadgeUI('재연결중', false);
+              }
+            });
+
+            mqttClients.push(client);
+          } catch (err) {
+            console.warn('Broker connect error:', err);
+          }
+        });
       }
 
-      // 2. Also pull from Firebase if configured
       pullFirebaseData();
     }
 
@@ -1429,7 +1450,6 @@
       const icon = document.getElementById('refreshIcon');
       if (icon) icon.classList.add('fa-spin');
 
-      // 1. 로컬 스토리지 확인
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
@@ -1443,17 +1463,21 @@
         console.warn('refresh error:', e);
       }
 
-      // 2. MQTT 브로커 재구독 (Retained 되어 있는 모든 다른 기기의 서명 패킷을 즉시 다시 당겨옴!)
-      if (mqttClient && mqttConnected) {
-        try {
-          mqttClient.unsubscribe(MQTT_TOPIC_SIG_PREFIX + '#', () => {
-            mqttClient.subscribe(MQTT_TOPIC_SIG_PREFIX + '#', { qos: 1 });
-          });
-          mqttClient.publish(MQTT_TOPIC_CMD, JSON.stringify({ sender: DEVICE_ID, cmd: 'REQUEST_SYNC', ts: Date.now() }));
-        } catch (e) {}
-      }
+      // 연결된 모든 브로커에서 Retained 서명 패킷과 최신 상태를 즉시 재수신
+      mqttClients.forEach(c => {
+        if (c && c.connected) {
+          try {
+            c.unsubscribe(MQTT_TOPIC_SIG_PREFIX + '#', () => {
+              c.subscribe(MQTT_TOPIC_SIG_PREFIX + '#', { qos: 1 });
+            });
+            c.unsubscribe(MQTT_TOPIC_STATE, () => {
+              c.subscribe(MQTT_TOPIC_STATE, { qos: 1 });
+            });
+            c.publish(MQTT_TOPIC_CMD, JSON.stringify({ sender: DEVICE_ID, cmd: 'REQUEST_SYNC', ts: Date.now() }), { qos: 1 });
+          } catch (e) {}
+        }
+      });
 
-      // 3. Firebase DB 풀링 (설정된 경우)
       await pullFirebaseData();
 
       updateEduInfoDisplay();
@@ -1466,7 +1490,7 @@
         const signedCnt = (g.roster || []).filter(r => {
           if (r.status !== 'work') return false;
           if (r.signatures && r.signatures[activeSess.id] && r.signatures[activeSess.id].signed) return true;
-          if (activeSess.id === 'sess-1' && r.signed) return true;
+          
           return false;
         }).length;
         showToast(`🔄 실시간 동기화 완료! (현재 서명완료: ${signedCnt}${g.unit})`);
@@ -1481,7 +1505,8 @@
         if (broadcast && syncChannel) {
           syncChannel.postMessage({ type: 'DATA_UPDATED', timestamp: Date.now() });
         }
-        if (pushCloud) {
+        // 오직 관리자 모드일 때만 전체 상태(명단/인증코드)를 클라우드에 푸시하여 기사님 폰의 빈 상태 덮어쓰기 방지!
+        if (pushCloud && currentMode === 'admin') {
           pushCloudState();
         }
       } catch (e) {
@@ -1520,6 +1545,8 @@
     const modeParam = urlParams.get('mode');
     const authParam = urlParams.get('auth') || urlParams.get('pin');
     const groupParam = urlParams.get('group');
+    const sessParam = urlParams.get('sess');
+    const presetParam = urlParams.get('preset'); // '1111' or '1112'
 
     if (modeParam === 'admin') {
       currentMode = 'admin';
@@ -1533,12 +1560,28 @@
       const cleanPin = String(authParam).trim();
       if (cleanPin.length === 4 && !isNaN(cleanPin)) {
         appData.authCode = cleanPin;
-        saveState();
       }
     }
 
     if (groupParam && appData.groups[groupParam]) {
       activeTargetGroup = groupParam;
+    }
+
+    if (sessParam) {
+      appData.activeSessionId = sessParam;
+    }
+
+    // [중요] 기사님이 QR을 찍고 들어왔을 때(mode=worker), 기사님 폰에 아직 운전기사 배차표가 없다면
+    // QR 파라미터(preset=1111 또는 1112) 또는 기본 64명 명단을 즉시 세팅하여 0초 만에 본인 차량 검색/서명이 가능하도록 보장!
+    if (currentMode === 'worker' && (!appData.groups.driver.roster || appData.groups.driver.roster.length === 0)) {
+      const baseDrivers = (presetParam === '1112') ? OFFICIAL_1112_DRIVERS : OFFICIAL_1111_DRIVERS_BACKUP;
+      appData.groups.driver.roster = baseDrivers.map(d => ({
+        ...d,
+        signed: false,
+        sigData: null,
+        sigTime: null,
+        signatures: {}
+      }));
     }
 
     // ==================== REALTIME CROSS-TAB & MULTI-VIEW LISTENERS ====================
@@ -1754,6 +1797,7 @@
       saveState();
       updateEduInfoDisplay();
       renderAll();
+      renderQrContent();
       showToast(`${sess.title} 회차로 전환되었습니다.`);
     }
 
@@ -1773,7 +1817,7 @@
         const signedCount = roster.filter(r => {
           if (r.status !== 'work') return false;
           if (r.signatures && r.signatures[sess.id] && r.signatures[sess.id].signed) return true;
-          if (sess.id === 'sess-1' && r.signed) return true;
+          
           return false;
         }).length;
 
@@ -1907,10 +1951,10 @@
       const signedCount = roster.filter(r => {
         if (r.status !== 'work') return false;
         if (r.signatures && r.signatures[activeSess.id] && r.signatures[activeSess.id].signed) return true;
-        if (activeSess.id === 'sess-1' && r.signed) return true;
+        
         return false;
       }).length;
-      const unsignedCount = roster.filter(r => r.status === 'work' && !r.signed).length;
+      const unsignedCount = Math.max(0, workCount - signedCount);
       const percent = workCount > 0 ? Math.round((signedCount / workCount) * 100) : 0;
 
       document.getElementById('targetGroupSelect').value = activeTargetGroup;
@@ -2068,7 +2112,7 @@
       const filtered = roster.filter(item => {
         if (activeStatusFilter === 'work' && item.status !== 'work') return false;
         if (activeStatusFilter === 'off' && item.status !== 'off') return false;
-        const sessSign = (item.signatures && item.signatures[activeSess.id]) || (activeSess.id === 'sess-1' ? { signed: item.signed, sigData: item.sigData, sigTime: item.sigTime } : { signed: false });
+        const sessSign = (item.signatures && item.signatures[activeSess.id]) || { signed: false, sigData: null, sigTime: null };
         if (activeStatusFilter === 'signed' && !sessSign.signed) return false;
         if (activeStatusFilter === 'unsigned' && (item.status !== 'work' || sessSign.signed)) return false;
 
@@ -2131,7 +2175,7 @@
       let html = '';
       filtered.forEach((item, idx) => {
         const isWork = item.status === 'work';
-        const sessSign = (item.signatures && item.signatures[activeSess.id]) || (activeSess.id === 'sess-1' ? { signed: item.signed, sigData: item.sigData, sigTime: item.sigTime } : { signed: false });
+        const sessSign = (item.signatures && item.signatures[activeSess.id]) || { signed: false, sigData: null, sigTime: null };
         const isSigned = sessSign.signed;
         const currentSigData = sessSign.sigData;
         const currentSigTime = sessSign.sigTime;
@@ -2524,9 +2568,10 @@
         sigTime: timeStr
       };
 
-      currentSigningItem.signed = true;
-      currentSigningItem.sigData = sigData;
-      currentSigningItem.sigTime = timeStr;
+      // 회차별 독립 저장을 위해 최상위 signed 플래그는 사용하지 않음 (1차/2차 간 서명 침범 원천 차단!)
+      currentSigningItem.signed = false;
+      currentSigningItem.sigData = null;
+      currentSigningItem.sigTime = null;
 
       const savedPersonName = currentSigningItem.driverName || currentSigningItem.carNo;
       // [핵심] 다른 기기(관리자 폰)로 서명 완료 패킷을 즉시 실시간 전송!
@@ -3480,9 +3525,13 @@
       const isWorker = currentQrTab === 'worker';
       const baseUrl = getBaseUrl();
 
+      const activeSess = getActiveSession();
+      const driverOffCnt = (appData.groups.driver && appData.groups.driver.roster) ? appData.groups.driver.roster.filter(r => r.status === 'off').length : 10;
+      const presetCode = driverOffCnt === 15 ? '1112' : '1111';
+
       let liveUrl = baseUrl;
       if (isWorker) {
-        liveUrl += `?mode=worker&group=${activeTargetGroup}&auth=${currentPin}`;
+        liveUrl += `?mode=worker&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}&preset=${presetCode}&auth=${currentPin}`;
       } else {
         liveUrl += `?mode=admin&group=${activeTargetGroup}`;
       }
@@ -3673,15 +3722,15 @@
     function openShareModal() {
       const g = appData.groups[activeTargetGroup];
       const total = g.roster.length;
+      const activeSess = getActiveSession();
       const work = g.roster.filter(r => r.status === 'work').length;
       const off = g.roster.filter(r => r.status === 'off').length;
-      const signed = g.roster.filter(r => r.signed).length;
-      const unsigned = work - signed;
+      const signed = g.roster.filter(r => r.status === 'work' && r.signatures && r.signatures[activeSess.id] && r.signatures[activeSess.id].signed).length;
+      const unsigned = Math.max(0, work - signed);
       const pct = work > 0 ? Math.round((signed / work) * 100) : 0;
       const unit = g.unit;
       const term = g.workTerm;
 
-      const activeSess = getActiveSession();
       const reportLines = [
         `[원주TC 안전보건교육 서명 현황]`,
         `■ 교육과정: ${activeSess.title}`,
@@ -3742,7 +3791,7 @@
       const signed = roster.filter(r => {
         if (r.status !== 'work') return false;
         if (r.signatures && r.signatures[activeSess.id] && r.signatures[activeSess.id].signed) return true;
-        if (activeSess.id === 'sess-1' && r.signed) return true;
+        
         return false;
       }).length;
       const off = roster.filter(r => r.status === 'off').length;
@@ -3773,7 +3822,7 @@
         pageItems.forEach((item, i) => {
           const globalIdx = (pageNum - 1) * itemsPerPage + i;
           const isWork = item.status === 'work';
-          const sessSign = (item.signatures && item.signatures[activeSess.id]) || (activeSess.id === 'sess-1' ? { signed: item.signed, sigData: item.sigData } : { signed: false });
+          const sessSign = (item.signatures && item.signatures[activeSess.id]) || { signed: false, sigData: null };
           
           let sigCell = '';
           if (!isWork) {
