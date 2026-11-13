@@ -833,7 +833,7 @@
 
   <script>
     // ==================== APP STATE & OFFICIAL 11/11 ROSTER DATABASE ====================
-    const STORAGE_KEY = 'edu_sign_app_state_v49';
+    const STORAGE_KEY = 'edu_sign_app_state_v50';
 
     const DEFAULT_NETLIFY_URL = "https://glittering-fairy-c50df8.netlify.app";
 
@@ -1222,6 +1222,7 @@
         if (item.signatures && item.signatures[targetSessId]) {
           delete item.signatures[targetSessId];
         }
+        clearDeviceLockForSessionIfMatch(targetSessId, pkt.groupKey, item);
         item.signed = false;
         item.sigData = null;
         item.sigTime = null;
@@ -2237,9 +2238,9 @@
               </button>
             </div>
           ` : `
-            <button type="button" onclick="openSignatureModal('${item.id}')" class="text-[11px] text-emerald-700 font-bold hover:bg-emerald-100/60 px-2.5 py-1 rounded-lg border border-emerald-200 shrink-0">
-              재서명
-            </button>
+            <span class="text-[10px] text-emerald-700 font-bold bg-emerald-100/80 px-2 py-1 rounded-lg border border-emerald-200 shrink-0 flex items-center gap-1">
+              <i class="fa-solid fa-lock text-[9px]"></i> 서명확정
+            </span>
           `;
 
           bottomAction = `
@@ -2257,11 +2258,39 @@
             </div>
           `;
         } else {
-          bottomAction = `
-            <button type="button" onclick="openSignatureModal('${item.id}')" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5">
-              <i class="fa-solid fa-signature"></i> 서명하기
-            </button>
-          `;
+          // 현장 서명용 모드(worker)에서 이미 이 휴대폰으로 다른 사람(또는 본인) 1회 서명을 마친 경우, 나머지 모든 카드는 서명 버튼 비활성화!
+          let isDeviceLockedForOther = false;
+          let lockedOwnerLabel = '';
+          if (!isAdmin) {
+            const lockInfo = getDeviceLockForSession(activeSess.id, activeTargetGroup);
+            if (lockInfo && lockInfo.personKey) {
+              const lockedItem = roster.find(r => {
+                const pk = (activeTargetGroup === 'driver') ? (r.carNo || r.driverName) : r.driverName;
+                return pk === lockInfo.personKey || r.id === lockInfo.itemId;
+              });
+              const stillSigned = lockedItem && lockedItem.signatures && lockedItem.signatures[activeSess.id] && lockedItem.signatures[activeSess.id].signed;
+              if (stillSigned) {
+                isDeviceLockedForOther = true;
+                lockedOwnerLabel = lockInfo.driverName || lockInfo.carNo || '';
+              } else {
+                clearDeviceLockForSessionIfMatch(activeSess.id, activeTargetGroup, null);
+              }
+            }
+          }
+
+          if (isDeviceLockedForOther) {
+            bottomAction = `
+              <button type="button" onclick="openSignatureModal('${item.id}')" class="w-full py-2.5 rounded-xl bg-slate-100 text-slate-400 border border-slate-200 font-bold text-[11px] cursor-not-allowed flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-lock text-[10px] text-slate-400"></i> 1인 1회 서명 완료됨 (${lockedOwnerLabel} 외 대리서명 불가)
+              </button>
+            `;
+          } else {
+            bottomAction = `
+              <button type="button" onclick="openSignatureModal('${item.id}')" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-signature"></i> 서명하기
+              </button>
+            `;
+          }
         }
 
         html += `
@@ -2448,10 +2477,87 @@
       if (placeholder) placeholder.classList.remove('hidden');
     }
 
+    // ==================== 1대 단말기 1회 서명 제한 (대리서명 원천 차단 엔진) ====================
+    const DEVICE_SIGN_LOCK_KEY = 'edu_device_sign_locks_v50';
+
+    function getDeviceSignLocks() {
+      try {
+        const raw = localStorage.getItem(DEVICE_SIGN_LOCK_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function getDeviceLockForSession(sessionId, groupKey) {
+      const locks = getDeviceSignLocks();
+      const key = `${sessionId}_${groupKey}`;
+      return locks[key] || null;
+    }
+
+    function setDeviceLockForSession(sessionId, groupKey, item) {
+      try {
+        const locks = getDeviceSignLocks();
+        const key = `${sessionId}_${groupKey}`;
+        const personKey = (groupKey === 'driver') ? (item.carNo || item.driverName) : item.driverName;
+        locks[key] = {
+          itemId: item.id,
+          personKey: personKey,
+          carNo: item.carNo || '',
+          driverName: item.driverName || '',
+          ts: Date.now()
+        };
+        localStorage.setItem(DEVICE_SIGN_LOCK_KEY, JSON.stringify(locks));
+      } catch (e) {}
+    }
+
+    function clearDeviceLockForSessionIfMatch(sessionId, groupKey, item) {
+      try {
+        const locks = getDeviceSignLocks();
+        const key = `${sessionId}_${groupKey}`;
+        const existing = locks[key];
+        if (!existing) return;
+        const personKey = item ? ((groupKey === 'driver') ? (item.carNo || item.driverName) : item.driverName) : null;
+        if (!item || existing.itemId === item.id || existing.personKey === personKey || existing.driverName === item.driverName) {
+          delete locks[key];
+          localStorage.setItem(DEVICE_SIGN_LOCK_KEY, JSON.stringify(locks));
+        }
+      } catch (e) {}
+    }
+
     function openSignatureModal(itemId) {
       const groupData = appData.groups[activeTargetGroup];
       const item = groupData.roster.find(r => r.id === itemId);
       if (!item) return;
+
+      const activeSess = getActiveSession();
+
+      // [핵심 보안] 현장 서명용 모드(worker)에서는 단말기 1대당 현재 교육 회차에 딱 1번(1명)만 서명 가능!
+      if (currentMode !== 'admin') {
+        const sessSign = (item.signatures && item.signatures[activeSess.id]) || { signed: false };
+        if (sessSign.signed) {
+          showToast('🔒 이미 서명이 완료되었습니다. (수정/삭제는 관리자에게 문의하세요)');
+          return;
+        }
+
+        const lockInfo = getDeviceLockForSession(activeSess.id, activeTargetGroup);
+        const currentPersonKey = (activeTargetGroup === 'driver') ? (item.carNo || item.driverName) : item.driverName;
+        if (lockInfo && lockInfo.personKey) {
+          // 만약 잠금된 대상자의 서명이 관리자에 의해 삭제된 상태라면 잠금 자동 해제!
+          const lockedItem = groupData.roster.find(r => {
+            const pk = (activeTargetGroup === 'driver') ? (r.carNo || r.driverName) : r.driverName;
+            return pk === lockInfo.personKey || r.id === lockInfo.itemId;
+          });
+          const stillSigned = lockedItem && lockedItem.signatures && lockedItem.signatures[activeSess.id] && lockedItem.signatures[activeSess.id].signed;
+          if (!stillSigned) {
+            clearDeviceLockForSessionIfMatch(activeSess.id, activeTargetGroup, null);
+          } else {
+            const lockedLabel = lockInfo.carNo ? `${lockInfo.driverName}(${lockInfo.carNo})` : lockInfo.driverName;
+            showToast(`🚫 1인 1회 서명 제한: 이 휴대폰은 이미 [${lockedLabel}] 님의 서명을 완료하여 추가/대리 서명이 불가합니다.`);
+            return;
+          }
+        }
+      }
 
       currentSigningItem = item;
       document.getElementById('sigModalGroupTag').textContent = `${groupData.name} 서명`;
@@ -2506,6 +2612,7 @@
       item.sigData = null;
       item.sigTime = null;
 
+      clearDeviceLockForSessionIfMatch(activeSess.id, activeTargetGroup, item);
       pushCloudSignature(activeTargetGroup, item, activeSess.id, 'delete');
       saveState();
       renderAll();
@@ -2574,12 +2681,16 @@
       currentSigningItem.sigTime = null;
 
       const savedPersonName = currentSigningItem.driverName || currentSigningItem.carNo;
-      // [핵심] 다른 기기(관리자 폰)로 서명 완료 패킷을 즉시 실시간 전송!
+      // [핵심 보안] 현장 서명용 화면에서 서명 완료 시, 이 단말기에 '현재 회차 1회 서명 완료 잠금'을 즉시 기록하여 타인 대리서명 및 중복서명 원천 차단!
+      if (currentMode !== 'admin') {
+        setDeviceLockForSession(activeSess.id, activeTargetGroup, currentSigningItem);
+      }
+      // 다른 기기(관리자 폰)로 서명 완료 패킷을 즉시 실시간 전송!
       pushCloudSignature(activeTargetGroup, currentSigningItem, activeSess.id, 'sign');
       saveState();
       closeSignatureModal();
       renderAll();
-      showToast(`✅ [${savedPersonName}] 님의 서명이 관리자 화면으로 실시간 전송 및 저장되었습니다.`);
+      showToast(`✅ [${savedPersonName}] 님의 서명이 완료되었습니다. (본 단말기 1인 1회 서명 잠금 적용)`);
     }
 
     // ==================== ADVANCED KOREAN ROSTER PARSER ====================
