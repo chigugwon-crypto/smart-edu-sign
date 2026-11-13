@@ -833,7 +833,7 @@
 
   <script>
     // ==================== APP STATE & OFFICIAL 11/11 ROSTER DATABASE ====================
-    const STORAGE_KEY = 'edu_sign_app_state_v50';
+    const STORAGE_KEY = 'edu_sign_app_state_v51';
 
     const DEFAULT_NETLIFY_URL = "https://glittering-fairy-c50df8.netlify.app";
 
@@ -978,43 +978,85 @@
       }
     };
 
-    let appData = defaultData;
+    const SESSION_STORAGE_KEY = 'edu_sign_active_tab_session_v51';
+
+    // 현재 접속이 '새로고침(reload)'인지, 아니면 '신규/재접속(navigate)'인지 정확히 판별!
+    function isPageReloadNavigation() {
+      try {
+        const navEntries = performance.getEntriesByType && performance.getEntriesByType('navigation');
+        if (navEntries && navEntries.length > 0) {
+          return navEntries[0].type === 'reload';
+        }
+        if (performance.navigation) {
+          return performance.navigation.type === 1;
+        }
+      } catch (e) {}
+      return false;
+    }
+
+    const IS_RELOAD_NAVIGATION = isPageReloadNavigation();
+    let hasAdminUploadedDispatchInThisSession = false;
+
+    let appData = JSON.parse(JSON.stringify(defaultData));
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.groups && parsed.groups.driver) {
-          if (!parsed.groups.staff || !parsed.groups.staff.roster || parsed.groups.staff.roster.length === 0) {
-            parsed.groups.staff = defaultData.groups.staff;
-          }
-          if (!parsed.groups.warehouse_day || !parsed.groups.warehouse_day.roster || parsed.groups.warehouse_day.roster.length === 0) {
-            parsed.groups.warehouse_day = defaultData.groups.warehouse_day;
-          }
-          if (!parsed.groups.warehouse_night || !parsed.groups.warehouse_night.roster || parsed.groups.warehouse_night.roster.length === 0) {
-            parsed.groups.warehouse_night = defaultData.groups.warehouse_night;
-          }
-          // 지회영 이름 자동 보정 및 보관하역 직책(반장 등) 완전 제거
-          (parsed.groups.warehouse_day.roster || []).forEach(r => { r.role = ''; });
-          (parsed.groups.warehouse_night.roster || []).forEach(r => {
-            if (r.driverName === '지희영') r.driverName = '지회영';
-            r.role = '';
-          });
-          // 저장된 수기 수정 성명 마스터 사전(customDriverNames)을 배차표 원본 배열에도 즉시 반영하여 앞으로도 계속 수정된 이름 유지!
-          if (parsed.customDriverNames) {
+      // 1) 영구 설정(수기 수정 성명 마스터, 관리자 암호, 도메인, 스탭/보관 고정명단)은 localStorage에서 복원
+      const savedPerm = localStorage.getItem(STORAGE_KEY);
+      if (savedPerm) {
+        const parsedPerm = JSON.parse(savedPerm);
+        if (parsedPerm) {
+          if (parsedPerm.adminPin) appData.adminPin = parsedPerm.adminPin;
+          if (parsedPerm.customDomain) appData.customDomain = parsedPerm.customDomain;
+          if (parsedPerm.firebaseDbUrl) appData.firebaseDbUrl = parsedPerm.firebaseDbUrl;
+          if (parsedPerm.customDriverNames) {
+            appData.customDriverNames = parsedPerm.customDriverNames;
             [OFFICIAL_1111_DRIVERS_BACKUP, OFFICIAL_1112_DRIVERS].forEach(arr => {
               arr.forEach(d => {
-                if (parsed.customDriverNames[d.carNo]) {
-                  d.driverName = parsed.customDriverNames[d.carNo].driverName || d.driverName;
-                  d.cell = parsed.customDriverNames[d.carNo].cell || d.cell;
+                if (parsedPerm.customDriverNames[d.carNo]) {
+                  d.driverName = parsedPerm.customDriverNames[d.carNo].driverName || d.driverName;
+                  d.cell = parsedPerm.customDriverNames[d.carNo].cell || d.cell;
                 }
               });
             });
           }
-          appData = parsed;
+          if (parsedPerm.groups) {
+            ['staff', 'warehouse_day', 'warehouse_night'].forEach(gk => {
+              if (parsedPerm.groups[gk] && parsedPerm.groups[gk].customBaseRoster && parsedPerm.groups[gk].customBaseRoster.length > 0) {
+                appData.groups[gk].customBaseRoster = parsedPerm.groups[gk].customBaseRoster;
+                appData.groups[gk].roster = parsedPerm.groups[gk].customBaseRoster.map(m => ({ ...m, signed: false, sigData: null, sigTime: null, signatures: {} }));
+              }
+            });
+          }
         }
       }
+
+      // 2) 만약 '새로고침(F5 / 모바일 당겨서 새로고침)'인 경우에만 현재 탭(sessionStorage)의 배차표 및 서명 현황을 그대로 유지!
+      // 반대로 창을 닫았다가 다시 들어오거나 새 주소로 재접속(navigate)한 경우에는 sessionStorage를 초기화하여 가동현황 올린 파일이 무조건 0대(초기화 상태)로 시작!
+      if (IS_RELOAD_NAVIGATION) {
+        const savedSess = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        if (savedSess) {
+          const parsedSess = JSON.parse(savedSess);
+          if (parsedSess && parsedSess.groups && parsedSess.groups.driver) {
+            appData = parsedSess;
+            if (appData.groups.driver.roster && appData.groups.driver.roster.length > 0) {
+              hasAdminUploadedDispatchInThisSession = true;
+            }
+          }
+        }
+      } else {
+        // 신규 접속 / 재접속 시에는 이전 세션의 배차표 캐시를 깨끗하게 비워서 무조건 초기화된 상태(0대)로 동작!
+        sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        appData.groups.driver.uploadedFiles = [];
+        appData.groups.driver.roster = [];
+      }
+
+      // 지회영 이름 자동 보정 및 보관하역 직책 완전 제거
+      (appData.groups.warehouse_day.roster || []).forEach(r => { r.role = ''; });
+      (appData.groups.warehouse_night.roster || []).forEach(r => {
+        if (r.driverName === '지희영') r.driverName = '지회영';
+        r.role = '';
+      });
     } catch (e) {
-      console.warn('localStorage read error:', e);
+      console.warn('Storage init error:', e);
     }
 
     // ==================== MULTI-DEVICE REALTIME CLOUD & PUB/SUB SYNC ENGINE ====================
@@ -1127,7 +1169,11 @@
         const locG = appData.groups[k];
         if (!remG || !locG || !Array.isArray(remG.roster)) return;
 
-        // 원격(관리자)에 명단이 있으면 반영. 원격이 0대인데 관리자 모드인 경우에는 로컬 명단을 지우지 않도록 보호!
+        // [핵심] 관리자가 새로 접속해서 아직 가동현황 배차표를 올리지 않은 초기 상태(0대)일 때는,
+        // 이전에 클라우드에 남아있던 옛날 배차표가 저절로 불러와지지 않도록 차단! (오직 기사님 서명용 모드이거나 관리자가 배차표를 올린 후에만 병합)
+        if (k === 'driver' && currentMode === 'admin' && !hasAdminUploadedDispatchInThisSession) {
+          return;
+        }
         if (remG.roster.length > 0 || (currentMode === 'worker' && remG.roster.length === 0)) {
           const existingMap = {};
           (locG.roster || []).forEach(it => {
@@ -1197,7 +1243,10 @@
       const g = appData.groups[pkt.groupKey];
       if (!g) return;
 
-      // 만약 관리자 폰 또는 기사 폰에 아직 운전기사 배차표가 안 올라와 있는데 서명이 들어온 경우, 마스터 명단으로 자동 생성 후 반영
+      // 관리자가 새로 접속하여 아직 배차표를 업로드하지 않은 초기 상태(0대)라면, 이전 교육의 잔여 서명 패킷 때문에 배차표가 저절로 생성되지 않도록 보호!
+      if (pkt.groupKey === 'driver' && currentMode === 'admin' && !hasAdminUploadedDispatchInThisSession) {
+        return;
+      }
       if ((!g.roster || g.roster.length === 0) && pkt.groupKey === 'driver') {
         const use1112 = pkt.rosterPreset === '1112';
         const baseArr = use1112 ? OFFICIAL_1112_DRIVERS : OFFICIAL_1111_DRIVERS_BACKUP;
@@ -1452,7 +1501,7 @@
       if (icon) icon.classList.add('fa-spin');
 
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && parsed.groups) {
@@ -1501,28 +1550,43 @@
     function saveState(broadcast = true, pushCloud = true) {
       try {
         const raw = JSON.stringify(appData);
-        localStorage.setItem(STORAGE_KEY, raw);
+        // 1) 현재 접속 세션(새로고침 유지용)은 sessionStorage에 저장
+        sessionStorage.setItem(SESSION_STORAGE_KEY, raw);
+        // 2) 영구 설정(수기 수정 성명 사전, 암호, 도메인 등)은 localStorage에 저장하되 driver 배차표는 저장하지 않아 재접속 시 항상 0대로 초기화!
+        const permCopy = {
+          adminPin: appData.adminPin,
+          customDomain: appData.customDomain,
+          firebaseDbUrl: appData.firebaseDbUrl,
+          customDriverNames: appData.customDriverNames || {},
+          groups: {
+            staff: { customBaseRoster: appData.groups.staff.customBaseRoster },
+            warehouse_day: { customBaseRoster: appData.groups.warehouse_day.customBaseRoster },
+            warehouse_night: { customBaseRoster: appData.groups.warehouse_night.customBaseRoster }
+          }
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(permCopy));
+
         lastSavedRawState = raw;
         if (broadcast && syncChannel) {
-          syncChannel.postMessage({ type: 'DATA_UPDATED', timestamp: Date.now() });
+          syncChannel.postMessage({ type: 'DATA_UPDATED', payload: raw, timestamp: Date.now() });
         }
-        // 오직 관리자 모드일 때만 전체 상태(명단/인증코드)를 클라우드에 푸시하여 기사님 폰의 빈 상태 덮어쓰기 방지!
         if (pushCloud && currentMode === 'admin') {
           pushCloudState();
         }
       } catch (e) {
-        console.warn('localStorage save error:', e);
+        console.warn('storage save error:', e);
       }
     }
 
-    function reloadFromStorage() {
+    function reloadFromStorage(incomingRaw) {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = incomingRaw || sessionStorage.getItem(SESSION_STORAGE_KEY);
         if (!raw || raw === lastSavedRawState) return;
         const parsed = JSON.parse(raw);
         if (parsed && parsed.groups) {
           appData = parsed;
           lastSavedRawState = raw;
+          sessionStorage.setItem(SESSION_STORAGE_KEY, raw);
           updateEduInfoDisplay();
           renderAll();
         }
@@ -1589,7 +1653,7 @@
     if (syncChannel) {
       syncChannel.onmessage = (event) => {
         if (event.data && event.data.type === 'DATA_UPDATED') {
-          reloadFromStorage();
+          reloadFromStorage(event.data.payload);
         }
       };
     }
@@ -1608,7 +1672,7 @@
     window.addEventListener('focus', reloadFromStorage);
 
     setInterval(() => {
-      const currentRaw = localStorage.getItem(STORAGE_KEY) || '';
+      const currentRaw = sessionStorage.getItem(SESSION_STORAGE_KEY) || '';
       if (currentRaw && currentRaw !== lastSavedRawState) {
         reloadFromStorage();
       }
@@ -2907,6 +2971,7 @@
           showToast(`✅ 추가 입력 항목이 삭제되고 [${g.name}] 기본 고정 명단(${g.roster.length}${g.unit})이 유지됩니다.`);
         } else {
           g.roster = [];
+          if (uploadTargetGroup === 'driver') hasAdminUploadedDispatchInThisSession = false;
           parsedUploadItems = null;
           const ta = document.getElementById('pasteTextArea');
           if (ta) ta.value = '';
@@ -3086,6 +3151,9 @@
 
     function autoCommitParsedRoster() {
       if (parsedUploadItems && parsedUploadItems.roster && parsedUploadItems.roster.length > 0) {
+        if (uploadTargetGroup === 'driver') {
+          hasAdminUploadedDispatchInThisSession = true;
+        }
         const g = appData.groups[uploadTargetGroup];
         const existingMap = {};
         const keyOf = (it) => (uploadTargetGroup === 'driver') ? (it.carNo || it.driverName) : it.driverName;
@@ -3532,6 +3600,7 @@
         showToast(`🔄 [${g.name}] 기본 고정 명단(${g.roster.length}${g.unit})으로 복원되었습니다.`);
       } else {
         g.roster = [];
+        if (uploadTargetGroup === 'driver') hasAdminUploadedDispatchInThisSession = false;
         const ta = document.getElementById('pasteTextArea');
         if (ta) ta.value = '';
         parsedUploadItems = null;
