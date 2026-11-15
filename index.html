@@ -1029,9 +1029,20 @@
     const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v54';
     const MQTT_TOPIC_STATE = MQTT_TOPIC_BASE + '/state';     // Retained: 관리자가 설정한 명단(가동/휴무), 회차, 최신 인증코드
     const MQTT_TOPIC_SIG_PREFIX = MQTT_TOPIC_BASE + '/sig/'; // Retained per person: 기사님/참석자 서명 패킷
-    const MQTT_TOPIC_CMD = MQTT_TOPIC_BASE + '/cmd';         // 실시간 명령 (기사 폰 접속 시 REQUEST_SYNC -> 관리자 폰 즉시 응답)
+    const MQTT_TOPIC_CMD = MQTT_TOPIC_BASE + '/cmd';         // 실시간 명령 (REQUEST_SYNC -> 관리자 폰 즉시 응답)
+
+    // [핵심] 사내 PC 방화벽(삼성전자로지텍 등 웹소켓/비표준 포트 차단 환경)을 100% 통과하는 표준 HTTPS(443 포트) 실시간 클라우드 릴레이 채널!
+    const HTTP_RELAY_BASE = 'https://ntfy.sh';
+    const HTTP_TOPIC_STATE = 'wonjutc_smart_edu_v54_state';
+    const HTTP_TOPIC_SIGS = 'wonjutc_smart_edu_v54_sigs';
+    const HTTP_TOPIC_CMD = 'wonjutc_smart_edu_v54_cmd';
+
     let mqttClients = [];
     let activeBrokerCount = 0;
+    let httpRelayConnected = false;
+    let httpEventSource = null;
+    let lastHttpPollTime = 0;
+    let lastAppliedRemoteStateTs = 0;
 
     let FIREBASE_DB_URL = (appData && appData.firebaseDbUrl) ? appData.firebaseDbUrl : '';
 
@@ -1051,8 +1062,7 @@
     let pendingRemoteSigPackets = {};
     let hasLocalAdminChanges = false;
 
-    // 64대 설치기사 가동/휴무 상태를 16자리 16진수(rmask)로 초경량 압축하여 QR/복사 URL에 직접 내장!
-    // 사내 방화벽(포트 차단) 환경에서도 QR이나 복사한 주소로 접속하는 즉시 0.01초 만에 가동 55대/휴무 9대 등 명단이 100% 동일하게 세팅됩니다.
+    // 64대 설치기사 가동/휴무 상태를 16자리 16진수(rmask)로 초경량 압축
     function encodeDriverRosterMask(roster) {
       if (!roster || roster.length === 0) return 'empty';
       let hex = '';
@@ -1118,6 +1128,63 @@
         });
       }
       return result;
+    }
+
+    // [초경량 500바이트 상태 패킷] HTTPS 443 릴레이(ntfy 4KB 제한 이하)와 MQTT 모두에서 0.1초 만에 전송되는 압축 상태 페이로드
+    function buildCompactHttpStatePayload() {
+      const dGroup = appData.groups.driver || { roster: [], uploadedFiles: [] };
+      const dRoster = dGroup.roster || [];
+      const rmask = encodeDriverRosterMask(dRoster);
+
+      const sigMap = {};
+      ['driver', 'staff', 'warehouse_day', 'warehouse_night'].forEach(gk => {
+        const g = appData.groups[gk];
+        if (!g || !g.roster) return;
+        g.roster.forEach(r => {
+          if (r.signatures) {
+            const pKey = (gk === 'driver') ? (r.carNo || r.driverName) : r.driverName;
+            Object.keys(r.signatures).forEach(sId => {
+              if (r.signatures[sId] && r.signatures[sId].signed) {
+                if (!sigMap[sId]) sigMap[sId] = {};
+                if (!sigMap[sId][gk]) sigMap[sId][gk] = {};
+                sigMap[sId][gk][pKey] = r.signatures[sId].sigTime || '서명완료';
+              }
+            });
+          }
+        });
+      });
+
+      const offNames = {};
+      ['staff', 'warehouse_day', 'warehouse_night'].forEach(gk => {
+        const g = appData.groups[gk];
+        if (!g || !g.roster) return;
+        const offs = g.roster.filter(r => r.status === 'off').map(r => r.driverName);
+        if (offs.length > 0) offNames[gk] = offs;
+      });
+
+      let customDList = null;
+      if (dRoster.length > 0 && dRoster.length !== OFFICIAL_1112_DRIVERS.length) {
+        customDList = dRoster.map(r => [r.cell, r.carNo, r.driverName, r.status === 'off' ? 1 : 0]);
+      }
+
+      const activeChip = (dGroup.uploadedFiles || []).find(f => f.active) || (dGroup.uploadedFiles || [])[0];
+
+      return {
+        isCompact: true,
+        sender: DEVICE_ID,
+        ts: Date.now(),
+        lastResetTs: appData.lastResetTs || 0,
+        authCode: String(appData.authCode || '7429').trim(),
+        activeSessionId: appData.activeSessionId || 'sess-1',
+        activeTargetGroup: activeTargetGroup || 'driver',
+        sessions: appData.sessions || [],
+        customDriverNames: appData.customDriverNames || {},
+        rmask: rmask,
+        chipLabel: activeChip ? activeChip.label : '',
+        customDList: customDList,
+        offNames: offNames,
+        sigMap: sigMap
+      };
     }
 
     function buildLightweightStatePayload() {
@@ -1200,12 +1267,14 @@
     }
 
     function applyRemoteStatePayload(payload) {
-      if (!payload || !payload.groups) return false;
+      if (!payload) return false;
+      if (payload.ts && payload.ts < lastAppliedRemoteStateTs) return false;
+      if (payload.ts) lastAppliedRemoteStateTs = payload.ts;
+
       let changed = false;
 
       if (payload.lastResetTs && payload.lastResetTs > (appData.lastResetTs || 0)) {
         appData.lastResetTs = payload.lastResetTs;
-        // 초기화 이전의 오래된 캐시 패킷 정리
         Object.keys(pendingRemoteSigPackets).forEach(k => {
           if (pendingRemoteSigPackets[k] && pendingRemoteSigPackets[k].ts < appData.lastResetTs) {
             delete pendingRemoteSigPackets[k];
@@ -1214,7 +1283,6 @@
         changed = true;
       }
 
-      // 1. 관리자가 변경한 최신 인증코드를 PC 관리자 화면 및 기사님 폰 모두에 실시간 동기화!
       if (payload.authCode && String(payload.authCode).trim() !== String(appData.authCode).trim()) {
         appData.authCode = String(payload.authCode).trim();
         const hVal = document.getElementById('headerAuthCodeVal');
@@ -1225,7 +1293,6 @@
         changed = true;
       }
 
-      // 2. 교육 회차 목록 및 활성 회차 동기화 (PC 관리자 및 현장 서명용 모두 동기화!)
       if (payload.sessions && Array.isArray(payload.sessions) && payload.sessions.length > 0) {
         appData.sessions = payload.sessions;
         changed = true;
@@ -1240,77 +1307,165 @@
         appData.customDriverNames = { ...(appData.customDriverNames || {}), ...payload.customDriverNames };
       }
 
-      // 3. 각 그룹별 명단 및 가동/휴무 상태 병합 (기존에 수신된 서명 이미지는 절대 지워지지 않고 유지!)
-      ['driver', 'staff', 'warehouse_day', 'warehouse_night'].forEach(k => {
-        const remG = payload.groups[k];
-        const locG = appData.groups[k];
-        if (!remG || !locG || !Array.isArray(remG.roster)) return;
-
-        // [핵심] 관리자가 [초기화] 후 [업데이트 적용]을 눌러 명단을 비운 경우(remG.roster.length === 0),
-        // 카톡 링크나 PC 관리자 창 등 모든 화면에서 즉시 0대(초기화 상태)로 반영!
-        if (k === 'driver' && remG.roster.length === 0) {
+      // A. 초경량 압축 포맷(isCompact: true, HTTPS 443 릴레이용) 처리
+      if (payload.isCompact) {
+        const locD = appData.groups.driver;
+        if (payload.rmask === 'empty') {
           hasAdminUploadedDispatchInThisSession = false;
-          if (locG.roster.length > 0 || (locG.uploadedFiles && locG.uploadedFiles.length > 0)) {
-            locG.roster = [];
-            locG.uploadedFiles = [];
+          if (locD.roster.length > 0 || (locD.uploadedFiles && locD.uploadedFiles.length > 0)) {
+            locD.roster = [];
+            locD.uploadedFiles = [];
             changed = true;
           }
-          return;
-        }
-        if (remG.roster.length > 0) {
-          if (k === 'driver') {
-            hasAdminUploadedDispatchInThisSession = true;
-          }
+        } else if (payload.customDList && Array.isArray(payload.customDList)) {
+          hasAdminUploadedDispatchInThisSession = true;
           const existingMap = {};
-          (locG.roster || []).forEach(it => {
-            const key = (k === 'driver') ? (it.carNo || it.driverName) : it.driverName;
-            existingMap[key] = it;
-          });
-
-          if (remG.uploadedFiles) {
-            locG.uploadedFiles = remG.uploadedFiles;
-          }
-
-          locG.roster = remG.roster.map(remItem => {
-            const key = (k === 'driver') ? (remItem.carNo || remItem.driverName) : remItem.driverName;
-            const prev = existingMap[key];
-            const mergedSigs = (prev && prev.signatures) ? { ...prev.signatures } : {};
-
-            if (remItem.sigMeta) {
-              Object.keys(remItem.sigMeta).forEach(sId => {
-                if (remItem.sigMeta[sId] && remItem.sigMeta[sId].signed) {
-                  if (!mergedSigs[sId]) {
-                    mergedSigs[sId] = {
-                      signed: true,
-                      sigData: (prev && prev.sigData) || makeFallbackStampSvg(remItem.driverName || remItem.carNo),
-                      sigTime: remItem.sigMeta[sId].sigTime || ''
-                    };
-                  } else {
-                    mergedSigs[sId].signed = true;
-                    mergedSigs[sId].sigTime = remItem.sigMeta[sId].sigTime || mergedSigs[sId].sigTime;
-                  }
-                }
-              });
-            }
-
+          (locD.roster || []).forEach(r => { existingMap[r.carNo || r.driverName] = r; });
+          locD.roster = payload.customDList.map((arr, idx) => {
+            const prev = existingMap[arr[1] || arr[2]];
             return {
-              id: remItem.id,
-              carNo: remItem.carNo,
-              driverName: remItem.driverName,
-              role: remItem.role || (prev ? prev.role : ''),
-              cell: remItem.cell,
-              status: remItem.status,
+              id: prev ? prev.id : `d-${idx + 1}`,
+              cell: arr[0],
+              carNo: arr[1],
+              driverName: arr[2],
+              role: '',
+              status: arr[3] === 1 ? 'off' : 'work',
               signed: false,
               sigData: null,
               sigTime: null,
-              signatures: mergedSigs
+              signatures: prev && prev.signatures ? { ...prev.signatures } : {}
             };
           });
           changed = true;
+        } else if (payload.rmask) {
+          hasAdminUploadedDispatchInThisSession = true;
+          const decoded = decodeDriverRosterMask(payload.rmask, locD.roster);
+          if (decoded.length > 0) {
+            locD.roster = decoded;
+            const wCnt = decoded.filter(r => r.status === 'work').length;
+            const oCnt = decoded.filter(r => r.status === 'off').length;
+            const lines = decoded.map(d => `${d.cell}\t${d.carNo}\t${d.driverName}\t${d.status === 'work' ? '가동' : '휴무'}`);
+            locD.uploadedFiles = [{
+              id: 'file-remote-sync',
+              label: payload.chipLabel || `배차표(가동${wCnt}/휴무${oCnt})`,
+              rawText: lines.join('\n'),
+              active: true
+            }];
+            changed = true;
+          }
         }
-      });
 
-      // 먼저 도착해 있던 서명 이미지 패킷들을 명단 위에 즉시 재적용!
+        // 스탭 및 보관하역 휴무 상태 반영
+        ['staff', 'warehouse_day', 'warehouse_night'].forEach(gk => {
+          const g = appData.groups[gk];
+          if (!g || !g.roster) return;
+          const offSet = new Set((payload.offNames && payload.offNames[gk]) || []);
+          g.roster.forEach(r => {
+            const nextStatus = offSet.has(r.driverName) ? 'off' : 'work';
+            if (r.status !== nextStatus) {
+              r.status = nextStatus;
+              changed = true;
+            }
+          });
+        });
+
+        // 서명 메타데이터 병합
+        if (payload.sigMap) {
+          Object.keys(payload.sigMap).forEach(sId => {
+            const byGroup = payload.sigMap[sId] || {};
+            Object.keys(byGroup).forEach(gk => {
+              const g = appData.groups[gk];
+              if (!g || !g.roster) return;
+              const byPerson = byGroup[gk] || {};
+              g.roster.forEach(r => {
+                const pk = (gk === 'driver') ? (r.carNo || r.driverName) : r.driverName;
+                if (byPerson[pk]) {
+                  if (!r.signatures) r.signatures = {};
+                  if (!r.signatures[sId]) {
+                    r.signatures[sId] = {
+                      signed: true,
+                      sigData: makeFallbackStampSvg(r.driverName || r.carNo),
+                      sigTime: byPerson[pk]
+                    };
+                    changed = true;
+                  }
+                }
+              });
+            });
+          });
+        }
+      }
+
+      // B. 전체 그룹 포맷(payload.groups) 처리
+      if (payload.groups) {
+        ['driver', 'staff', 'warehouse_day', 'warehouse_night'].forEach(k => {
+          const remG = payload.groups[k];
+          const locG = appData.groups[k];
+          if (!remG || !locG || !Array.isArray(remG.roster)) return;
+
+          if (k === 'driver' && remG.roster.length === 0) {
+            hasAdminUploadedDispatchInThisSession = false;
+            if (locG.roster.length > 0 || (locG.uploadedFiles && locG.uploadedFiles.length > 0)) {
+              locG.roster = [];
+              locG.uploadedFiles = [];
+              changed = true;
+            }
+            return;
+          }
+          if (remG.roster.length > 0) {
+            if (k === 'driver') {
+              hasAdminUploadedDispatchInThisSession = true;
+            }
+            const existingMap = {};
+            (locG.roster || []).forEach(it => {
+              const key = (k === 'driver') ? (it.carNo || it.driverName) : it.driverName;
+              existingMap[key] = it;
+            });
+
+            if (remG.uploadedFiles) {
+              locG.uploadedFiles = remG.uploadedFiles;
+            }
+
+            locG.roster = remG.roster.map(remItem => {
+              const key = (k === 'driver') ? (remItem.carNo || remItem.driverName) : remItem.driverName;
+              const prev = existingMap[key];
+              const mergedSigs = (prev && prev.signatures) ? { ...prev.signatures } : {};
+
+              if (remItem.sigMeta) {
+                Object.keys(remItem.sigMeta).forEach(sId => {
+                  if (remItem.sigMeta[sId] && remItem.sigMeta[sId].signed) {
+                    if (!mergedSigs[sId]) {
+                      mergedSigs[sId] = {
+                        signed: true,
+                        sigData: (prev && prev.sigData) || makeFallbackStampSvg(remItem.driverName || remItem.carNo),
+                        sigTime: remItem.sigMeta[sId].sigTime || ''
+                      };
+                    } else {
+                      mergedSigs[sId].signed = true;
+                      mergedSigs[sId].sigTime = remItem.sigMeta[sId].sigTime || mergedSigs[sId].sigTime;
+                    }
+                  }
+                });
+              }
+
+              return {
+                id: remItem.id,
+                carNo: remItem.carNo,
+                driverName: remItem.driverName,
+                role: remItem.role || (prev ? prev.role : ''),
+                cell: remItem.cell,
+                status: remItem.status,
+                signed: false,
+                sigData: null,
+                sigTime: null,
+                signatures: mergedSigs
+              };
+            });
+            changed = true;
+          }
+        });
+      }
+
       if (replayCachedSignaturePackets()) {
         changed = true;
       }
@@ -1319,6 +1474,7 @@
         saveState(false, false);
         updateEduInfoDisplay();
         renderAll();
+        renderQrContent();
       }
       return changed;
     }
@@ -1328,7 +1484,7 @@
       return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40"><text x="10" y="26" font-family="sans-serif" font-size="16" font-weight="bold" fill="%230f172a">' + encodeURIComponent(clean) + '</text></svg>';
     }
 
-    // 원격에서 개별 참석자 서명 패킷 수신 시 즉시 반영! (기사님 폰 -> 모바일/PC 관리자 화면 0.1초 직통!)
+    // 원격에서 개별 참석자 서명 패킷 수신 시 즉시 반영!
     function applyRemoteSignaturePacket(pkt) {
       if (!pkt || !pkt.groupKey || !pkt.personKey) return;
       if (pkt.ts && appData.lastResetTs && pkt.ts < appData.lastResetTs) return;
@@ -1344,7 +1500,6 @@
       const g = appData.groups[pkt.groupKey];
       if (!g) return;
 
-      // 현재 설치기사 명단이 비어 있는 상태(0대)라면, 캐시에만 보관하고 명단(STATE)이 도착할 때 병합 (초기화 상태 보호!)
       if (pkt.groupKey === 'driver' && (!g.roster || g.roster.length === 0)) {
         return;
       }
@@ -1370,7 +1525,6 @@
           sigData: pkt.sigData || makeFallbackStampSvg(item.driverName || item.carNo),
           sigTime: pkt.sigTime || ''
         };
-        // [핵심] 오직 실제로 서명한 해당 교육 회차(targetSessId)에만 정확히 저장! (1차/2차 간 서명 섞임 원천 차단!)
         item.signatures[targetSessId] = sigEntry;
         item.signed = false;
         item.sigData = null;
@@ -1384,10 +1538,12 @@
     function compressSignatureCanvas(srcCanvas) {
       try {
         const tmp = document.createElement('canvas');
-        tmp.width = 200;
-        tmp.height = 80;
+        tmp.width = 150;
+        tmp.height = 60;
         const tctx = tmp.getContext('2d');
         tctx.drawImage(srcCanvas, 0, 0, tmp.width, tmp.height);
+        const webp = tmp.toDataURL('image/webp', 0.55);
+        if (webp && webp.length < 3000) return webp;
         return tmp.toDataURL('image/png');
       } catch (e) {
         return srcCanvas ? srcCanvas.toDataURL('image/png') : '';
@@ -1404,15 +1560,26 @@
       });
     }
 
-    // [중요 가드레일] 전체 상태(명단, 가동/휴무, 인증코드)는 오직 '관리자(admin)' 모드에서만 발행!
-    // 기사님 폰(worker)이 열릴 때 빈 명단(0대)이나 구형 인증코드로 관리자의 상태를 덮어쓰던 치명적 버그를 100% 차단!
     function pushCloudState() {
       if (currentMode !== 'admin') return;
 
       const payload = buildLightweightStatePayload();
       const jsonStr = JSON.stringify(payload);
-
       publishToAllBrokers(MQTT_TOPIC_STATE, jsonStr, { qos: 1, retain: true });
+
+      // 표준 HTTPS(443 포트) 클라우드 릴레이로도 동시에 초경량 상태 패킷 전송 (사내 PC 방화벽 100% 통과!)
+      const compactPayload = buildCompactHttpStatePayload();
+      const compactStr = JSON.stringify(compactPayload);
+      fetch(`${HTTP_RELAY_BASE}/${HTTP_TOPIC_STATE}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Cache-Control': 'no-cache' },
+        body: compactStr
+      }).then(res => {
+        if (res.ok) {
+          httpRelayConnected = true;
+          checkAndUpdateBrokerBadge();
+        }
+      }).catch(() => {});
 
       const fbUrl = getActiveFirebaseUrl();
       if (fbUrl) {
@@ -1424,7 +1591,6 @@
       }
     }
 
-    // 개별 서명 패킷은 기사님 폰(worker)과 관리자 폰(admin) 모두 즉시 발행!
     function pushCloudSignature(groupKey, item, sessionId, action = 'sign') {
       if (!item) return;
       const personKey = (groupKey === 'driver') ? (item.carNo || item.driverName) : item.driverName;
@@ -1452,8 +1618,25 @@
       const jsonStr = JSON.stringify(pkt);
 
       publishToAllBrokers(topic, jsonStr, { qos: 1, retain: true });
-      // 동시에 실시간 이벤트 채널로도 즉시 브로드캐스트하여 0.05초 만에 관리자 화면 갱신!
       publishToAllBrokers(MQTT_TOPIC_CMD, JSON.stringify({ sender: DEVICE_ID, cmd: 'NEW_SIG', pkt: pkt, ts: Date.now() }), { qos: 1, retain: false });
+
+      // 표준 HTTPS(443 포트) 클라우드 릴레이로도 서명 패킷 즉시 전송!
+      let httpPkt = pkt;
+      let httpStr = jsonStr;
+      if (httpStr.length > 3800) {
+        httpPkt = { ...pkt, sigData: makeFallbackStampSvg(item.driverName || item.carNo) };
+        httpStr = JSON.stringify(httpPkt);
+      }
+      fetch(`${HTTP_RELAY_BASE}/${HTTP_TOPIC_SIGS}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Cache-Control': 'no-cache' },
+        body: httpStr
+      }).then(res => {
+        if (res.ok) {
+          httpRelayConnected = true;
+          checkAndUpdateBrokerBadge();
+        }
+      }).catch(() => {});
 
       const fbUrl = getActiveFirebaseUrl();
       if (fbUrl) {
@@ -1474,6 +1657,124 @@
         return appData.firebaseDbUrl.replace(/\/+$/, '');
       }
       return '';
+    }
+
+    // [핵심] 표준 HTTPS(443 포트) GET 폴링 & SSE 스트림 수신 엔진 (사내 PC에서 웹소켓이 막혀 있어도 100% 실시간 연동!)
+    async function pullHttpRelayData(fullPull = false) {
+      try {
+        const sinceParam = (!fullPull && lastHttpPollTime > 0) ? String(lastHttpPollTime) : '12h';
+        const url = `${HTTP_RELAY_BASE}/${HTTP_TOPIC_STATE},${HTTP_TOPIC_SIGS}/json?poll=1&since=${encodeURIComponent(sinceParam)}&_t=${Date.now()}`;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) return;
+
+        httpRelayConnected = true;
+        checkAndUpdateBrokerBadge();
+
+        const text = await res.text();
+        if (!text || !text.trim()) return;
+
+        const lines = text.trim().split(/\r?\n/);
+        let latestStateMsg = null;
+        const sigMsgs = [];
+
+        lines.forEach(line => {
+          try {
+            const ev = JSON.parse(line);
+            if (ev.time && ev.time > lastHttpPollTime) {
+              lastHttpPollTime = ev.time;
+            }
+            if (ev.event !== 'message' || !ev.message) return;
+            const data = JSON.parse(ev.message);
+            if (!data || data.sender === DEVICE_ID) return;
+
+            if (ev.topic === HTTP_TOPIC_STATE) {
+              if (!latestStateMsg || (data.ts && data.ts >= (latestStateMsg.ts || 0))) {
+                latestStateMsg = data;
+              }
+            } else if (ev.topic === HTTP_TOPIC_SIGS) {
+              sigMsgs.push(data);
+            }
+          } catch (e) {}
+        });
+
+        if (latestStateMsg) {
+          applyRemoteStatePayload(latestStateMsg);
+        }
+        sigMsgs.forEach(pkt => {
+          applyRemoteSignaturePacket(pkt);
+        });
+      } catch (e) {
+        // Ignore transient network errors
+      }
+    }
+
+    function initHttpRelayStream() {
+      // 1. 즉시 최근 12시간 내 저장된 최신 상태(가동/휴무 명단)와 서명 내역을 HTTPS 443으로 불러오기
+      pullHttpRelayData(true);
+
+      // 2. 표준 HTTPS(443) Server-Sent Events(SSE) 실시간 스트림 연결
+      if (typeof EventSource !== 'undefined') {
+        try {
+          if (httpEventSource) httpEventSource.close();
+          const sseUrl = `${HTTP_RELAY_BASE}/${HTTP_TOPIC_STATE},${HTTP_TOPIC_SIGS},${HTTP_TOPIC_CMD}/sse`;
+          httpEventSource = new EventSource(sseUrl);
+
+          httpEventSource.onopen = () => {
+            httpRelayConnected = true;
+            checkAndUpdateBrokerBadge();
+          };
+
+          httpEventSource.onmessage = (e) => {
+            try {
+              if (!e.data) return;
+              const ev = JSON.parse(e.data);
+              if (ev.time && ev.time > lastHttpPollTime) {
+                lastHttpPollTime = ev.time;
+              }
+              if (ev.event !== 'message' || !ev.message) return;
+              const data = JSON.parse(ev.message);
+              if (!data || data.sender === DEVICE_ID) return;
+
+              if (ev.topic === HTTP_TOPIC_STATE) {
+                applyRemoteStatePayload(data);
+              } else if (ev.topic === HTTP_TOPIC_SIGS) {
+                applyRemoteSignaturePacket(data);
+              } else if (ev.topic === HTTP_TOPIC_CMD) {
+                if (data.cmd === 'REQUEST_SYNC' && currentMode === 'admin') {
+                  const hasDriverRoster = appData.groups && appData.groups.driver && appData.groups.driver.roster && appData.groups.driver.roster.length > 0;
+                  if (hasLocalAdminChanges || hasDriverRoster) {
+                    pushCloudState();
+                  }
+                }
+              }
+            } catch (err) {}
+          };
+
+          httpEventSource.onerror = () => {
+            // SSE가 사내 프록시에 의해 끊기더라도 주기적 HTTPS 폴링이 백업 동작
+          };
+        } catch (e) {}
+      }
+
+      // 3. 만약 이 기기가 이미 배차표 명단(예: 모바일에서 업로드한 64대)을 가지고 있다면 즉시 클라우드 릴레이에 최신 상태 등록!
+      // 반대로 빈 상태(0대)로 방금 접속한 PC라면 모바일 관리자에게 상태 동기화 요청(REQUEST_SYNC) 발송!
+      setTimeout(() => {
+        const hasDriverRoster = appData.groups && appData.groups.driver && appData.groups.driver.roster && appData.groups.driver.roster.length > 0;
+        if (currentMode === 'admin' && (hasLocalAdminChanges || hasDriverRoster)) {
+          pushCloudState();
+        } else {
+          fetch(`${HTTP_RELAY_BASE}/${HTTP_TOPIC_CMD}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Cache-Control': 'no-cache' },
+            body: JSON.stringify({ sender: DEVICE_ID, cmd: 'REQUEST_SYNC', ts: Date.now() })
+          }).catch(() => {});
+        }
+      }, 600);
+
+      // 4. 사내 방화벽 프록시 환경을 위해 3초마다 표준 HTTPS 폴링으로 실시간 변경사항 자동 감지
+      setInterval(() => {
+        pullHttpRelayData(false);
+      }, 3000);
     }
 
     async function pullFirebaseData() {
@@ -1511,7 +1812,7 @@
     function checkAndUpdateBrokerBadge() {
       const connectedCnt = mqttClients.filter(c => c && c.connected).length;
       activeBrokerCount = connectedCnt;
-      if (connectedCnt > 0) {
+      if (connectedCnt > 0 || httpRelayConnected) {
         updateSyncBadgeUI('실시간연동', true);
       } else {
         updateSyncBadgeUI('재연결중', false);
@@ -1521,9 +1822,10 @@
     function initMultiDeviceRealtimeSync() {
       updateSyncBadgeUI('연결중', false);
 
+      // 표준 HTTPS(443 포트) 실시간 클라우드 릴레이 즉시 가동 (사내 PC 방화벽 100% 호환)
+      initHttpRelayStream();
+
       if (typeof mqtt !== 'undefined') {
-        // 사내 PC 방화벽(비표준 포트 차단)을 통과하는 표준 443 포트 브로커(eclipseprojects:443)를 포함한 다중 WSS 브로커 연결!
-        // 단 1개의 브로커만 연결되어도 '실시간연동(초록불)'이 유지되도록 상태 판정을 개선했습니다.
         const brokerUrls = [
           'wss://mqtt.eclipseprojects.io:443/mqtt',
           'wss://broker.emqx.io:8084/mqtt',
@@ -1608,20 +1910,7 @@
       const icon = document.getElementById('refreshIcon');
       if (icon) icon.classList.add('fa-spin');
 
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed && parsed.groups) {
-            appData = parsed;
-            lastSavedRawState = raw;
-          }
-        }
-      } catch (e) {
-        console.warn('refresh error:', e);
-      }
-
-      // 연결된 모든 브로커에서 Retained 서명 패킷과 최신 상태를 즉시 재수신
+      // 연결된 모든 MQTT 브로커 및 표준 HTTPS(443) 릴레이에서 최신 배차표 명단과 서명 패킷을 즉시 강제 수신!
       mqttClients.forEach(c => {
         if (c && c.connected) {
           try {
@@ -1636,7 +1925,17 @@
         }
       });
 
-      await pullFirebaseData();
+      fetch(`${HTTP_RELAY_BASE}/${HTTP_TOPIC_CMD}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Cache-Control': 'no-cache' },
+        body: JSON.stringify({ sender: DEVICE_ID, cmd: 'REQUEST_SYNC', ts: Date.now() })
+      }).catch(() => {});
+
+      lastAppliedRemoteStateTs = 0;
+      await Promise.all([
+        pullHttpRelayData(true),
+        pullFirebaseData()
+      ]);
 
       updateEduInfoDisplay();
       renderAll();
@@ -1645,13 +1944,13 @@
         if (icon) icon.classList.remove('fa-spin');
         const g = appData.groups[activeTargetGroup];
         const activeSess = getActiveSession();
+        const workCnt = (g.roster || []).filter(r => r.status === 'work').length;
         const signedCnt = (g.roster || []).filter(r => {
           if (r.status !== 'work') return false;
           if (r.signatures && r.signatures[activeSess.id] && r.signatures[activeSess.id].signed) return true;
-          
           return false;
         }).length;
-        showToast(`🔄 실시간 동기화 완료! (현재 서명완료: ${signedCnt}${g.unit})`);
+        showToast(`🔄 실시간 동기화 완료! (${g.workTerm} ${workCnt}${g.unit} / 서명완료 ${signedCnt}${g.unit})`);
       }, 400);
     }
 
@@ -1732,8 +2031,8 @@
       appData.activeSessionId = sessParam;
     }
 
-    // [핵심] QR코드 및 주소 복사 URL에 내장된 실시간 배차표 비트마스크(rmask)가 있으면,
-    // PC 관리자 화면이든 현장 서명용 화면이든 접속 즉시 0.01초 만에 모바일과 동일한 가동/휴무 명단(예: 가동 55대/휴무 9대)을 복원!
+    // [핵심] URL 파라미터(rmask 또는 preset)로 전달된 배차표를 적용한 즉시 saveState(false, false)를 호출하여,
+    // 1.5초 뒤 localStorage 폴링이나 [새로고침] 클릭 시 예전 0대/2차 상태로 되돌아가던 버그를 100% 해결!
     if (rmaskParam) {
       if (rmaskParam === 'empty') {
         appData.groups.driver.roster = [];
@@ -1764,22 +2063,17 @@
           appData.groups.driver.roster = decodedRoster;
           const wCnt = decodedRoster.filter(r => r.status === 'work').length;
           const oCnt = decodedRoster.filter(r => r.status === 'off').length;
-          if (!appData.groups.driver.uploadedFiles || appData.groups.driver.uploadedFiles.length === 0) {
-            const lines = decodedRoster.map(d => `${d.cell}\t${d.carNo}\t${d.driverName}\t${d.status === 'work' ? '가동' : '휴무'}`);
-            appData.groups.driver.uploadedFiles = [{
-              id: 'file-sync-url',
-              label: `배차표(가동${wCnt}/휴무${oCnt})`,
-              rawText: lines.join('\n'),
-              active: true
-            }];
-          }
+          const lines = decodedRoster.map(d => `${d.cell}\t${d.carNo}\t${d.driverName}\t${d.status === 'work' ? '가동' : '휴무'}`);
+          appData.groups.driver.uploadedFiles = [{
+            id: 'file-sync-url',
+            label: `배차표(가동${wCnt}/휴무${oCnt})`,
+            rawText: lines.join('\n'),
+            active: true
+          }];
           hasAdminUploadedDispatchInThisSession = true;
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-          } catch (e) {}
         }
       }
-    } else if ((presetParam === '1111' || presetParam === '1112') && (!appData.groups.driver.roster || appData.groups.driver.roster.length === 0)) {
+    } else if (presetParam === '1111' || presetParam === '1112') {
       const baseDrivers = (presetParam === '1112') ? OFFICIAL_1112_DRIVERS : OFFICIAL_1111_DRIVERS_BACKUP;
       appData.groups.driver.roster = baseDrivers.map(d => ({
         ...d,
@@ -1790,6 +2084,14 @@
       }));
       hasAdminUploadedDispatchInThisSession = true;
     }
+
+    // URL 파라미터가 적용된 현재 상태를 즉시 lastSavedRawState와 localStorage에 동기화하여 덮어쓰기 방지!
+    try {
+      const initRaw = JSON.stringify(appData);
+      localStorage.setItem(STORAGE_KEY, initRaw);
+      sessionStorage.setItem(SESSION_STORAGE_KEY, initRaw);
+      lastSavedRawState = initRaw;
+    } catch (e) {}
 
     // ==================== REALTIME CROSS-TAB & MULTI-VIEW LISTENERS ====================
     if (syncChannel) {
