@@ -985,8 +985,11 @@
     let hasAdminUploadedDispatchInThisSession = true;
 
     let appData = JSON.parse(JSON.stringify(defaultData));
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
     try {
-      const savedPerm = localStorage.getItem(STORAGE_KEY);
+      // [핵심] 창을 닫고 다시 열면 모바일처럼 PC에서도 완전히 초기화된 상태로 시작하고,
+      // 같은 창에서 F5(새로고침)를 누를 때만 현재 작업 내용이 유지되도록 sessionStorage를 사용합니다!
+      const savedPerm = sessionStorage.getItem(SESSION_STORAGE_KEY);
       if (savedPerm) {
         const parsed = JSON.parse(savedPerm);
         if (parsed && parsed.groups && parsed.groups.driver) {
@@ -1070,7 +1073,7 @@
     }
 
     // 원격 서명 패킷 임시 캐시 (PC 관리자 접속 시 STATE 패킷보다 서명 패킷이 먼저 도착하더라도 100% 누락 없이 병합!)
-    let pendingRemoteSigPackets = {}; try { localStorage.removeItem(DEVICE_SIGN_LOCK_KEY); } catch (e) {}
+    let pendingRemoteSigPackets = {};
     let hasLocalAdminChanges = false;
     const PAGE_OPEN_TS = Date.now();
     let hasUrlProvidedRoster = false;
@@ -2107,7 +2110,6 @@
           syncBrowserUrlBar();
         }
         const raw = JSON.stringify(appData);
-        localStorage.setItem(STORAGE_KEY, raw);
         sessionStorage.setItem(SESSION_STORAGE_KEY, raw);
         lastSavedRawState = raw;
         if (broadcast && syncChannel) {
@@ -2123,7 +2125,7 @@
 
     function reloadFromStorage(incomingRaw) {
       try {
-        const raw = incomingRaw || localStorage.getItem(STORAGE_KEY);
+        const raw = incomingRaw || sessionStorage.getItem(SESSION_STORAGE_KEY);
         if (!raw || raw === lastSavedRawState) return;
         const parsed = JSON.parse(raw);
         if (parsed && parsed.groups) {
@@ -2257,23 +2259,11 @@
           hasUrlProvidedRoster = true;
         }
       }
-    } else if (presetParam === '1111' || presetParam === '1112') {
-      const baseDrivers = (presetParam === '1112') ? OFFICIAL_1112_DRIVERS : OFFICIAL_1111_DRIVERS_BACKUP;
-      appData.groups.driver.roster = baseDrivers.map(d => ({
-        ...d,
-        signed: false,
-        sigData: null,
-        sigTime: null,
-        signatures: {}
-      }));
-      hasAdminUploadedDispatchInThisSession = true;
-      hasUrlProvidedRoster = true;
     }
 
     // URL 파라미터가 적용된 현재 상태를 즉시 lastSavedRawState와 localStorage에 동기화하여 덮어쓰기 방지!
     try {
       const initRaw = JSON.stringify(appData);
-      localStorage.setItem(STORAGE_KEY, initRaw);
       sessionStorage.setItem(SESSION_STORAGE_KEY, initRaw);
       lastSavedRawState = initRaw;
     } catch (e) {}
@@ -2301,7 +2291,7 @@
     window.addEventListener('focus', reloadFromStorage);
 
     setInterval(() => {
-      const currentRaw = localStorage.getItem(STORAGE_KEY) || '';
+      const currentRaw = sessionStorage.getItem(SESSION_STORAGE_KEY) || '';
       if (currentRaw && currentRaw !== lastSavedRawState) {
         reloadFromStorage();
       }
