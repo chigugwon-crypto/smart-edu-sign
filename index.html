@@ -1773,15 +1773,24 @@
         httpPkt = { ...pkt, sigData: makeFallbackStampSvg(item.driverName || item.carNo) };
         httpStr = JSON.stringify(httpPkt);
       }
-      fetch(`${HTTP_RELAY_BASE}/${HTTP_TOPIC_SIGS}`, {
-        method: 'POST',
-        body: httpStr
-      }).then(res => {
-        if (res.ok) {
-          httpRelayConnected = true;
-          checkAndUpdateBrokerBadge();
-        }
-      }).catch(() => {});
+      const sendHttpSig = (retryLeft) => {
+        fetch(`${HTTP_RELAY_BASE}/${HTTP_TOPIC_SIGS}`, {
+          method: 'POST',
+          body: httpStr
+        }).then(res => {
+          if (res.ok) {
+            httpRelayConnected = true;
+            checkAndUpdateBrokerBadge();
+          } else if (retryLeft > 0) {
+            setTimeout(() => sendHttpSig(retryLeft - 1), 1500);
+          }
+        }).catch(() => {
+          if (retryLeft > 0) {
+            setTimeout(() => sendHttpSig(retryLeft - 1), 1500);
+          }
+        });
+      };
+      sendHttpSig(1);
 
       const fbUrl = getActiveFirebaseUrl();
       if (fbUrl) {
@@ -1927,12 +1936,12 @@
         }
       }, 600);
 
-      // 4. 사내 방화벽 프록시 환경을 위해 4초마다 표준 HTTPS 폴링으로 모바일 서명 및 변경사항 즉시 수신
+      // 4. 사내 방화벽 프록시 환경을 위한 백업 HTTPS 폴링 (SSE가 실시간 수신을 담당하며, 15초 주기 백업으로 429 차단 방지)
       setInterval(() => {
         if (document.visibilityState === 'visible') {
           pullHttpRelayData(false);
         }
-      }, 4000);
+      }, 15000);
     }
 
     async function pullFirebaseData() {
@@ -1996,7 +2005,7 @@
             const client = mqtt.connect(bUrl, {
               clientId: `wonjutc_${idx}_${DEVICE_ID}`,
               clean: true,
-              connectTimeout: 5000,
+              connectTimeout: 12000,
               reconnectPeriod: 4000
             });
 
@@ -2105,7 +2114,12 @@
           if (r.signatures && r.signatures[activeSess.id] && r.signatures[activeSess.id].signed) return true;
           return false;
         }).length;
-        showToast(`🔄 실시간 동기화 완료! (${g.workTerm} ${workCnt}${g.unit} / 서명완료 ${signedCnt}${g.unit})`);
+        const mqttCnt = mqttClients.filter(c => c && c.connected).length;
+        const chInfo = [];
+        if (mqttCnt > 0) chInfo.push(`MQTT:${mqttCnt}`);
+        if (httpRelayConnected) chInfo.push('HTTPS:OK');
+        const chText = chInfo.length > 0 ? chInfo.join(', ') : '오프라인';
+        showToast(`🔄 동기화 완료 (${chText}) · ${g.workTerm} ${workCnt}${g.unit} / 서명 ${signedCnt}${g.unit}`);
       }, 400);
     }
 
