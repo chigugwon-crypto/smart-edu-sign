@@ -1026,16 +1026,16 @@
     let lastSavedRawState = '';
     const DEVICE_ID = 'dev-' + Math.random().toString(36).substring(2, 9);
 
-    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v56';
+    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v57';
     const MQTT_TOPIC_STATE = MQTT_TOPIC_BASE + '/state';     // Retained: 관리자가 설정한 명단(가동/휴무), 회차, 최신 인증코드
     const MQTT_TOPIC_SIG_PREFIX = MQTT_TOPIC_BASE + '/sig/'; // Retained per person: 기사님/참석자 서명 패킷
     const MQTT_TOPIC_CMD = MQTT_TOPIC_BASE + '/cmd';         // 실시간 명령 (REQUEST_SYNC -> 관리자 폰 즉시 응답)
 
     // [핵심] 사내 PC 방화벽(삼성전자로지텍 등 웹소켓/비표준 포트 차단 환경)을 100% 통과하는 표준 HTTPS(443 포트) 실시간 클라우드 릴레이 채널!
     const HTTP_RELAY_BASE = 'https://ntfy.sh';
-    const HTTP_TOPIC_STATE = 'wonjutc_smart_edu_v56_state';
-    const HTTP_TOPIC_SIGS = 'wonjutc_smart_edu_v56_sigs';
-    const HTTP_TOPIC_CMD = 'wonjutc_smart_edu_v56_cmd';
+    const HTTP_TOPIC_STATE = 'wonjutc_smart_edu_v57_state';
+    const HTTP_TOPIC_SIGS = 'wonjutc_smart_edu_v57_sigs';
+    const HTTP_TOPIC_CMD = 'wonjutc_smart_edu_v57_cmd';
 
     let mqttClients = [];
     let activeBrokerCount = 0;
@@ -1064,6 +1064,22 @@
     const PAGE_OPEN_TS = Date.now();
     let hasUrlProvidedRoster = false;
     let hasUrlProvidedAuth = false;
+    const seenHttpEventIds = new Set();
+
+    // PC나 모바일에서 관리자가 핀번호(인증코드)를 변경하거나 가동 명단을 업데이트했을 때,
+    // 브라우저 주소창에 남아있던 초기 파라미터(&auth=7429 등)도 즉시 최신 값으로 갱신하여 3분 뒤나 새로고침 시 절대 7429나 0대로 되돌아가지 않도록 고정!
+    function syncBrowserUrlBar() {
+      try {
+        if (window.history && window.history.replaceState) {
+          const activeSess = getActiveSession();
+          const dRoster = (appData.groups && appData.groups.driver && appData.groups.driver.roster) ? appData.groups.driver.roster : [];
+          const rmaskCode = encodeDriverRosterMask(dRoster);
+          const currentPin = String(appData.authCode || '7429').trim();
+          const newSearch = `?mode=${currentMode}&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}&rmask=${rmaskCode}&auth=${currentPin}`;
+          window.history.replaceState(null, '', window.location.pathname + newSearch);
+        }
+      } catch (e) {}
+    }
 
     // 64대 설치기사 가동/휴무 상태를 16자리 16진수(rmask)로 초경량 압축
     function encodeDriverRosterMask(roster) {
@@ -1175,8 +1191,11 @@
       return {
         isCompact: true,
         sender: DEVICE_ID,
-        ts: Date.now(),
+        ts: appData.lastAdminEditTs || Date.now(),
+        lastAdminEditTs: appData.lastAdminEditTs || 0,
+        pinChangedTs: appData.pinChangedTs || 0,
         lastResetTs: appData.lastResetTs || 0,
+        isExplicitReset: Boolean(appData.isExplicitReset && dRoster.length === 0),
         authCode: String(appData.authCode || '7429').trim(),
         activeSessionId: appData.activeSessionId || 'sess-1',
         activeTargetGroup: activeTargetGroup || 'driver',
@@ -1226,8 +1245,11 @@
 
       return {
         sender: DEVICE_ID,
-        ts: Date.now(),
+        ts: appData.lastAdminEditTs || Date.now(),
+        lastAdminEditTs: appData.lastAdminEditTs || 0,
+        pinChangedTs: appData.pinChangedTs || 0,
         lastResetTs: appData.lastResetTs || 0,
+        isExplicitReset: Boolean(appData.isExplicitReset && (!appData.groups.driver.roster || appData.groups.driver.roster.length === 0)),
         isLiveAdminPush: hasAdminUploadedDispatchInThisSession,
         authCode: String(appData.authCode || '7429').trim(),
         activeSessionId: appData.activeSessionId || 'sess-1',
@@ -1271,24 +1293,104 @@
 
     function applyRemoteStatePayload(payload) {
       if (!payload) return false;
-      if (payload.ts && payload.ts < lastAppliedRemoteStateTs) return false;
+      let changed = false;
 
-      // [핵심 가드레일] QR코드를 찍어 접속한 화면(hasUrlProvidedRoster=true)에서는,
-      // QR 스캔 시점(PAGE_OPEN_TS) 이전에 서버에 남아있던 오래된 패킷이 QR의 최신 명단(예: 가동 55대)이나 인증코드(예: 9097)를 덮어쓰지 못하도록 원천 차단!
-      const isOlderThanPageOpen = !payload.ts || (payload.ts < PAGE_OPEN_TS);
+      // [1단계] 서명 데이터(sigMap / sigMeta)는 패킷 시각과 무관하게 언제나 먼저 병합하여 CSM/기사님 서명이 절대 누락되지 않도록 보장!
+      if (payload.sigMap) {
+        Object.keys(payload.sigMap).forEach(sId => {
+          const byGroup = payload.sigMap[sId] || {};
+          Object.keys(byGroup).forEach(gk => {
+            const g = appData.groups[gk];
+            if (!g || !g.roster) return;
+            const byPerson = byGroup[gk] || {};
+            g.roster.forEach(r => {
+              const pk = (gk === 'driver') ? (r.carNo || r.driverName) : r.driverName;
+              if (byPerson[pk]) {
+                if (!r.signatures) r.signatures = {};
+                if (!r.signatures[sId] || !r.signatures[sId].signed) {
+                  r.signatures[sId] = {
+                    signed: true,
+                    sigData: makeFallbackStampSvg(r.driverName || r.carNo),
+                    sigTime: byPerson[pk]
+                  };
+                  changed = true;
+                }
+              }
+            });
+          });
+        });
+      }
+
+      if (payload.groups) {
+        ['driver', 'staff', 'warehouse_day', 'warehouse_night'].forEach(gk => {
+          const remG = payload.groups[gk];
+          const locG = appData.groups[gk];
+          if (!remG || !locG || !Array.isArray(remG.roster) || !Array.isArray(locG.roster)) return;
+          remG.roster.forEach(remItem => {
+            if (!remItem.sigMeta) return;
+            const key = (gk === 'driver') ? (remItem.carNo || remItem.driverName) : remItem.driverName;
+            const locItem = locG.roster.find(r => ((gk === 'driver') ? (r.carNo || r.driverName) : r.driverName) === key);
+            if (!locItem) return;
+            Object.keys(remItem.sigMeta).forEach(sId => {
+              if (remItem.sigMeta[sId] && remItem.sigMeta[sId].signed) {
+                if (!locItem.signatures) locItem.signatures = {};
+                if (!locItem.signatures[sId] || !locItem.signatures[sId].signed) {
+                  locItem.signatures[sId] = {
+                    signed: true,
+                    sigData: makeFallbackStampSvg(locItem.driverName || locItem.carNo),
+                    sigTime: remItem.sigMeta[sId].sigTime || '서명완료'
+                  };
+                  changed = true;
+                }
+              }
+            });
+          });
+        });
+      }
+
+      if (replayCachedSignaturePackets()) {
+        changed = true;
+      }
+
+      // [2단계] 명단 및 핀번호(인증코드) 보호 가드레일:
+      // 다른 기기에서 보낸 초기 상태(7429 또는 0대)가 현재 PC 관리자의 가동 명단이나 변경된 핀번호를 덮어쓰지 못하도록 타임스탬프 검증!
+      const incomingEditTs = payload.lastAdminEditTs || payload.ts || 0;
+      const localEditTs = appData.lastAdminEditTs || 0;
+      const isOlderThanPageOpen = !incomingEditTs || (incomingEditTs < PAGE_OPEN_TS);
       const isRemoteEmptyDriver = (payload.isCompact && payload.rmask === 'empty') ||
         (payload.groups && payload.groups.driver && Array.isArray(payload.groups.driver.roster) && payload.groups.driver.roster.length === 0);
 
-      if (hasUrlProvidedRoster && isRemoteEmptyDriver && isOlderThanPageOpen) {
-        return false;
+      // 만약 현재 기기에서 관리자가 이미 업데이트한 시각(localEditTs)보다 이전 패킷이면, 서명만 병합하고 명단/핀번호 덮어쓰기는 즉시 중단!
+      if (localEditTs > 0 && incomingEditTs < localEditTs) {
+        if (changed) {
+          saveState(false, false);
+          updateEduInfoDisplay();
+          renderAll();
+        }
+        return changed;
       }
 
-      if (payload.ts) lastAppliedRemoteStateTs = payload.ts;
+      // 빈 명단(0대) 패킷은 관리자가 명시적으로 [초기화]+[업데이트 적용]을 누른 경우(isExplicitReset=true)이며 현재 기기보다 최신일 때만 허용!
+      if (isRemoteEmptyDriver) {
+        const canAcceptReset = payload.isExplicitReset &&
+          (payload.lastResetTs > localEditTs) &&
+          (!hasUrlProvidedRoster || payload.lastResetTs > PAGE_OPEN_TS);
+        if (!canAcceptReset) {
+          if (changed) {
+            saveState(false, false);
+            updateEduInfoDisplay();
+            renderAll();
+          }
+          return changed;
+        }
+      }
 
-      let changed = false;
+      if (incomingEditTs > localEditTs) {
+        appData.lastAdminEditTs = incomingEditTs;
+      }
 
       if (payload.lastResetTs && payload.lastResetTs > (appData.lastResetTs || 0)) {
-        if (!hasUrlProvidedRoster || payload.lastResetTs > PAGE_OPEN_TS) {
+        if (payload.isExplicitReset && (!hasUrlProvidedRoster || payload.lastResetTs > PAGE_OPEN_TS)) {
           appData.lastResetTs = payload.lastResetTs;
           Object.keys(pendingRemoteSigPackets).forEach(k => {
             if (pendingRemoteSigPackets[k] && pendingRemoteSigPackets[k].ts < appData.lastResetTs) {
@@ -1299,15 +1401,21 @@
         }
       }
 
+      // 핀번호(인증코드) 보호: 기본값 '7429'가 이미 변경된 핀번호를 덮어쓰지 못하도록 차단하고, 더 최신에 변경된 핀번호만 수용!
       if (payload.authCode && String(payload.authCode).trim() !== String(appData.authCode).trim()) {
-        // QR URL로 인증번호(?auth=9097)를 직접 받아 접속한 경우, 접속 시점 이후에 관리자가 새로 변경한 코드만 반영
-        if (!hasUrlProvidedAuth || !isOlderThanPageOpen) {
-          appData.authCode = String(payload.authCode).trim();
+        const incPin = String(payload.authCode).trim();
+        const incPinTs = payload.pinChangedTs || 0;
+        const locPinTs = appData.pinChangedTs || 0;
+        const shouldAcceptPin = (incPinTs > locPinTs) || (locPinTs === 0 && !hasUrlProvidedAuth && incPin !== '7429');
+        if (shouldAcceptPin) {
+          appData.authCode = incPin;
+          if (incPinTs > locPinTs) appData.pinChangedTs = incPinTs;
           const hVal = document.getElementById('headerAuthCodeVal');
           if (hVal) hVal.textContent = appData.authCode;
           const mVal = document.getElementById('qrModalAuthCode');
           if (mVal) mVal.textContent = appData.authCode;
           renderQrContent();
+          syncBrowserUrlBar();
           changed = true;
         }
       }
@@ -1317,7 +1425,7 @@
         changed = true;
       }
 
-      if (payload.activeSessionId && appData.activeSessionId !== payload.activeSessionId) {
+      if (payload.activeSessionId && appData.activeSessionId !== payload.activeSessionId && !hasLocalAdminChanges) {
         appData.activeSessionId = payload.activeSessionId;
         changed = true;
       }
@@ -1326,17 +1434,15 @@
         appData.customDriverNames = { ...(appData.customDriverNames || {}), ...payload.customDriverNames };
       }
 
-      // A. 초경량 압축 포맷(isCompact: true, HTTPS 443 릴레이용) 처리
+      // A. 초경량 압축 포맷(isCompact: true) 명단 반영
       if (payload.isCompact) {
         const locD = appData.groups.driver;
         if (payload.rmask === 'empty') {
-          if (!hasUrlProvidedRoster || !isOlderThanPageOpen) {
-            hasAdminUploadedDispatchInThisSession = false;
-            if (locD.roster.length > 0 || (locD.uploadedFiles && locD.uploadedFiles.length > 0)) {
-              locD.roster = [];
-              locD.uploadedFiles = [];
-              changed = true;
-            }
+          hasAdminUploadedDispatchInThisSession = false;
+          if (locD.roster.length > 0 || (locD.uploadedFiles && locD.uploadedFiles.length > 0)) {
+            locD.roster = [];
+            locD.uploadedFiles = [];
+            changed = true;
           }
         } else if (payload.customDList && Array.isArray(payload.customDList)) {
           hasAdminUploadedDispatchInThisSession = true;
@@ -1376,7 +1482,6 @@
           }
         }
 
-        // 스탭 및 보관하역 휴무 상태 반영
         ['staff', 'warehouse_day', 'warehouse_night'].forEach(gk => {
           const g = appData.groups[gk];
           if (!g || !g.roster) return;
@@ -1389,35 +1494,9 @@
             }
           });
         });
-
-        // 서명 메타데이터 병합
-        if (payload.sigMap) {
-          Object.keys(payload.sigMap).forEach(sId => {
-            const byGroup = payload.sigMap[sId] || {};
-            Object.keys(byGroup).forEach(gk => {
-              const g = appData.groups[gk];
-              if (!g || !g.roster) return;
-              const byPerson = byGroup[gk] || {};
-              g.roster.forEach(r => {
-                const pk = (gk === 'driver') ? (r.carNo || r.driverName) : r.driverName;
-                if (byPerson[pk]) {
-                  if (!r.signatures) r.signatures = {};
-                  if (!r.signatures[sId]) {
-                    r.signatures[sId] = {
-                      signed: true,
-                      sigData: makeFallbackStampSvg(r.driverName || r.carNo),
-                      sigTime: byPerson[pk]
-                    };
-                    changed = true;
-                  }
-                }
-              });
-            });
-          });
-        }
       }
 
-      // B. 전체 그룹 포맷(payload.groups) 처리
+      // B. 전체 그룹 포맷(payload.groups) 명단 반영
       if (payload.groups) {
         ['driver', 'staff', 'warehouse_day', 'warehouse_night'].forEach(k => {
           const remG = payload.groups[k];
@@ -1425,13 +1504,11 @@
           if (!remG || !locG || !Array.isArray(remG.roster)) return;
 
           if (k === 'driver' && remG.roster.length === 0) {
-            if (!hasUrlProvidedRoster || !isOlderThanPageOpen) {
-              hasAdminUploadedDispatchInThisSession = false;
-              if (locG.roster.length > 0 || (locG.uploadedFiles && locG.uploadedFiles.length > 0)) {
-                locG.roster = [];
-                locG.uploadedFiles = [];
-                changed = true;
-              }
+            hasAdminUploadedDispatchInThisSession = false;
+            if (locG.roster.length > 0 || (locG.uploadedFiles && locG.uploadedFiles.length > 0)) {
+              locG.roster = [];
+              locG.uploadedFiles = [];
+              changed = true;
             }
             return;
           }
@@ -1498,6 +1575,7 @@
         updateEduInfoDisplay();
         renderAll();
         renderQrContent();
+        syncBrowserUrlBar();
       }
       return changed;
     }
@@ -1561,13 +1639,15 @@
     function compressSignatureCanvas(srcCanvas) {
       try {
         const tmp = document.createElement('canvas');
-        tmp.width = 150;
-        tmp.height = 60;
+        tmp.width = 140;
+        tmp.height = 56;
         const tctx = tmp.getContext('2d');
+        tctx.fillStyle = '#ffffff';
+        tctx.fillRect(0, 0, tmp.width, tmp.height);
         tctx.drawImage(srcCanvas, 0, 0, tmp.width, tmp.height);
-        const webp = tmp.toDataURL('image/webp', 0.55);
-        if (webp && webp.length < 3000) return webp;
-        return tmp.toDataURL('image/png');
+        const jpg = tmp.toDataURL('image/jpeg', 0.55);
+        if (jpg && jpg.length < 2400) return jpg;
+        return tmp.toDataURL('image/jpeg', 0.35);
       } catch (e) {
         return srcCanvas ? srcCanvas.toDataURL('image/png') : '';
       }
@@ -1590,12 +1670,12 @@
       const jsonStr = JSON.stringify(payload);
       publishToAllBrokers(MQTT_TOPIC_STATE, jsonStr, { qos: 1, retain: true });
 
-      // 표준 HTTPS(443 포트) 클라우드 릴레이로도 동시에 초경량 상태 패킷 전송 (사내 PC 방화벽 100% 통과!)
+      // [핵심 수정] ntfy.sh POST 시 'Cache-Control: no-cache' 헤더를 보내면 서버 캐시가 비활성화(Cache: no)되어 PC가 폴링할 때 메시지가 사라지므로,
+      // 헤더 없이 순수 Simple POST로 전송하여 ntfy 서버에 100% 영구 캐싱되도록 수정!
       const compactPayload = buildCompactHttpStatePayload();
       const compactStr = JSON.stringify(compactPayload);
       fetch(`${HTTP_RELAY_BASE}/${HTTP_TOPIC_STATE}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Cache-Control': 'no-cache' },
         body: compactStr
       }).then(res => {
         if (res.ok) {
@@ -1643,16 +1723,15 @@
       publishToAllBrokers(topic, jsonStr, { qos: 1, retain: true });
       publishToAllBrokers(MQTT_TOPIC_CMD, JSON.stringify({ sender: DEVICE_ID, cmd: 'NEW_SIG', pkt: pkt, ts: Date.now() }), { qos: 1, retain: false });
 
-      // 표준 HTTPS(443 포트) 클라우드 릴레이로도 서명 패킷 즉시 전송!
+      // 표준 HTTPS(443 포트) 클라우드 릴레이로 서명 패킷 즉시 전송 (Cache-Control 헤더 제거로 서버 100% 저장 보장!)
       let httpPkt = pkt;
       let httpStr = jsonStr;
-      if (httpStr.length > 3800) {
+      if (httpStr.length > 3200) {
         httpPkt = { ...pkt, sigData: makeFallbackStampSvg(item.driverName || item.carNo) };
         httpStr = JSON.stringify(httpPkt);
       }
       fetch(`${HTTP_RELAY_BASE}/${HTTP_TOPIC_SIGS}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Cache-Control': 'no-cache' },
         body: httpStr
       }).then(res => {
         if (res.ok) {
@@ -1685,8 +1764,11 @@
     // [핵심] 표준 HTTPS(443 포트) GET 폴링 & SSE 스트림 수신 엔진 (사내 PC에서 웹소켓이 막혀 있어도 100% 실시간 연동!)
     async function pullHttpRelayData(fullPull = false) {
       try {
-        const sinceParam = (!fullPull && lastHttpPollTime > 0) ? String(lastHttpPollTime) : '12h';
-        const url = `${HTTP_RELAY_BASE}/${HTTP_TOPIC_STATE},${HTTP_TOPIC_SIGS}/json?poll=1&since=${encodeURIComponent(sinceParam)}&_t=${Date.now()}`;
+        if (fullPull) {
+          seenHttpEventIds.clear();
+        }
+        const sinceParam = (!fullPull && lastHttpPollTime > 15) ? String(lastHttpPollTime - 10) : '12h';
+        const url = `${HTTP_RELAY_BASE}/${HTTP_TOPIC_STATE},${HTTP_TOPIC_SIGS}/json?poll=1&since=${encodeURIComponent(sinceParam)}`;
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) return;
 
@@ -1703,6 +1785,10 @@
         lines.forEach(line => {
           try {
             const ev = JSON.parse(line);
+            if (ev.id) {
+              if (seenHttpEventIds.has(ev.id)) return;
+              seenHttpEventIds.add(ev.id);
+            }
             if (ev.time && ev.time > lastHttpPollTime) {
               lastHttpPollTime = ev.time;
             }
@@ -1711,8 +1797,12 @@
             if (!data || data.sender === DEVICE_ID) return;
 
             if (ev.topic === HTTP_TOPIC_STATE) {
-              if (!latestStateMsg || (data.ts && data.ts >= (latestStateMsg.ts || 0))) {
+              if (!latestStateMsg || ((data.lastAdminEditTs || data.ts || 0) >= (latestStateMsg.lastAdminEditTs || latestStateMsg.ts || 0))) {
                 latestStateMsg = data;
+              }
+              // 이전 상태 메시지에 들어있는 서명 메타데이터도 누락 없이 병합
+              if (data.sigMap) {
+                applyRemoteStatePayload({ sigMap: data.sigMap });
               }
             } else if (ev.topic === HTTP_TOPIC_SIGS) {
               sigMsgs.push(data);
@@ -1751,6 +1841,10 @@
             try {
               if (!e.data) return;
               const ev = JSON.parse(e.data);
+              if (ev.id) {
+                if (seenHttpEventIds.has(ev.id)) return;
+                seenHttpEventIds.add(ev.id);
+              }
               if (ev.time && ev.time > lastHttpPollTime) {
                 lastHttpPollTime = ev.time;
               }
@@ -1765,7 +1859,7 @@
               } else if (ev.topic === HTTP_TOPIC_CMD) {
                 if (data.cmd === 'REQUEST_SYNC' && currentMode === 'admin') {
                   const hasDriverRoster = appData.groups && appData.groups.driver && appData.groups.driver.roster && appData.groups.driver.roster.length > 0;
-                  if (hasLocalAdminChanges || hasDriverRoster) {
+                  if ((appData.lastAdminEditTs || 0) > 0 && (hasLocalAdminChanges || hasDriverRoster)) {
                     pushCloudState();
                   }
                 }
@@ -1773,33 +1867,29 @@
             } catch (err) {}
           };
 
-          httpEventSource.onerror = () => {
-            // SSE가 사내 프록시에 의해 끊기더라도 주기적 HTTPS 폴링이 백업 동작
-          };
+          httpEventSource.onerror = () => {};
         } catch (e) {}
       }
 
-      // 3. 만약 이 기기가 이미 배차표 명단(예: 모바일에서 업로드한 64대)을 가지고 있다면 즉시 클라우드 릴레이에 최신 상태 등록!
-      // 반대로 빈 상태(0대)로 방금 접속한 PC라면 모바일 관리자에게 상태 동기화 요청(REQUEST_SYNC) 발송!
+      // 3. 실제 관리자가 수정한 이력(lastAdminEditTs > 0)이 있는 기기만 상태를 발행하고, 그렇지 않으면 동기화 요청만 수행
       setTimeout(() => {
         const hasDriverRoster = appData.groups && appData.groups.driver && appData.groups.driver.roster && appData.groups.driver.roster.length > 0;
-        if (currentMode === 'admin' && (hasLocalAdminChanges || hasDriverRoster)) {
+        if (currentMode === 'admin' && (appData.lastAdminEditTs || 0) > 0 && hasDriverRoster) {
           pushCloudState();
         } else {
           fetch(`${HTTP_RELAY_BASE}/${HTTP_TOPIC_CMD}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Cache-Control': 'no-cache' },
             body: JSON.stringify({ sender: DEVICE_ID, cmd: 'REQUEST_SYNC', ts: Date.now() })
           }).catch(() => {});
         }
       }, 600);
 
-      // 4. 사내 방화벽 프록시 환경을 위해 8초마다 표준 HTTPS 폴링으로 실시간 변경사항 자동 감지 (Rate Limit 방지)
+      // 4. 사내 방화벽 프록시 환경을 위해 4초마다 표준 HTTPS 폴링으로 모바일 서명 및 변경사항 즉시 수신
       setInterval(() => {
         if (document.visibilityState === 'visible') {
           pullHttpRelayData(false);
         }
-      }, 8000);
+      }, 4000);
     }
 
     async function pullFirebaseData() {
@@ -1875,10 +1965,8 @@
               client.subscribe(MQTT_TOPIC_CMD, { qos: 1 });
 
               const hasDriverRoster = appData.groups && appData.groups.driver && appData.groups.driver.roster && appData.groups.driver.roster.length > 0;
-              if ((currentMode === 'admin' && (hasLocalAdminChanges || hasDriverRoster)) || (hasUrlProvidedRoster && hasDriverRoster)) {
-                const payload = buildLightweightStatePayload();
-                client.publish(MQTT_TOPIC_STATE, JSON.stringify(payload), { qos: 1, retain: true });
-                if (currentMode === 'admin') pushCloudState();
+              if (currentMode === 'admin' && (appData.lastAdminEditTs || 0) > 0 && (hasLocalAdminChanges || hasDriverRoster)) {
+                pushCloudState();
               } else {
                 client.publish(MQTT_TOPIC_CMD, JSON.stringify({ sender: DEVICE_ID, cmd: 'REQUEST_SYNC', ts: Date.now() }), { qos: 1 });
               }
@@ -1898,7 +1986,7 @@
                 } else if (topic === MQTT_TOPIC_CMD) {
                   if (data.cmd === 'REQUEST_SYNC' && currentMode === 'admin') {
                     const hasDriverRoster = appData.groups && appData.groups.driver && appData.groups.driver.roster && appData.groups.driver.roster.length > 0;
-                    if (hasLocalAdminChanges || hasDriverRoster) {
+                    if ((appData.lastAdminEditTs || 0) > 0 && (hasLocalAdminChanges || hasDriverRoster)) {
                       pushCloudState();
                     }
                   } else if (data.cmd === 'NEW_SIG' && data.pkt) {
@@ -1954,11 +2042,8 @@
 
       fetch(`${HTTP_RELAY_BASE}/${HTTP_TOPIC_CMD}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Cache-Control': 'no-cache' },
         body: JSON.stringify({ sender: DEVICE_ID, cmd: 'REQUEST_SYNC', ts: Date.now() })
       }).catch(() => {});
-
-      lastAppliedRemoteStateTs = 0;
       await Promise.all([
         pullHttpRelayData(true),
         pullFirebaseData()
@@ -1983,6 +2068,14 @@
 
     function saveState(broadcast = true, pushCloud = true) {
       try {
+        if (pushCloud && currentMode === 'admin') {
+          hasLocalAdminChanges = true;
+          appData.lastAdminEditTs = Date.now();
+          if (appData.groups && appData.groups.driver && appData.groups.driver.roster && appData.groups.driver.roster.length > 0) {
+            appData.isExplicitReset = false;
+          }
+          syncBrowserUrlBar();
+        }
         const raw = JSON.stringify(appData);
         localStorage.setItem(STORAGE_KEY, raw);
         sessionStorage.setItem(SESSION_STORAGE_KEY, raw);
@@ -1991,7 +2084,6 @@
           syncChannel.postMessage({ type: 'DATA_UPDATED', payload: raw, timestamp: Date.now() });
         }
         if (pushCloud && currentMode === 'admin') {
-          hasLocalAdminChanges = true;
           pushCloudState();
         }
       } catch (e) {
@@ -2005,8 +2097,16 @@
         if (!raw || raw === lastSavedRawState) return;
         const parsed = JSON.parse(raw);
         if (parsed && parsed.groups) {
+          // 다른 탭의 오래된 초기 상태(lastAdminEditTs가 더 낮은 상태)가 현재 탭의 최신 가동 명단이나 핀번호를 덮어쓰지 않도록 보호!
+          if ((appData.lastAdminEditTs || 0) > (parsed.lastAdminEditTs || 0)) {
+            return;
+          }
           appData = parsed;
           lastSavedRawState = raw;
+          const hVal = document.getElementById('headerAuthCodeVal');
+          if (hVal) hVal.textContent = appData.authCode || '7429';
+          const mVal = document.getElementById('qrModalAuthCode');
+          if (mVal) mVal.textContent = appData.authCode || '7429';
           updateEduInfoDisplay();
           renderAll();
         }
@@ -2046,8 +2146,14 @@
     if (authParam) {
       const cleanPin = String(authParam).trim();
       if (cleanPin.length === 4 && !isNaN(cleanPin)) {
-        appData.authCode = cleanPin;
-        hasUrlProvidedAuth = true;
+        // 만약 PC 로컬저장소에 이미 관리자가 변경한 최신 핀번호(pinChangedTs > 0)가 있는데 주소창에 초기값 7429가 남아있는 경우 덮어쓰지 않음!
+        if (!(currentMode === 'admin' && (appData.pinChangedTs || 0) > 0 && cleanPin === '7429')) {
+          appData.authCode = cleanPin;
+          if (cleanPin !== '7429') {
+            appData.pinChangedTs = appData.pinChangedTs || Date.now();
+          }
+          hasUrlProvidedAuth = true;
+        }
       }
     }
 
@@ -2460,6 +2566,8 @@
     function changeAuthCode() {
       const next = String(Math.floor(1000 + Math.random() * 9000));
       appData.authCode = next;
+      appData.pinChangedTs = Date.now();
+      appData.lastAdminEditTs = Date.now();
       saveState();
 
       const hVal = document.getElementById('headerAuthCodeVal');
@@ -4079,6 +4187,8 @@
         g.uploadedFiles = [];
         hasAdminUploadedDispatchInThisSession = false;
         appData.lastResetTs = Date.now();
+        appData.lastAdminEditTs = Date.now();
+        appData.isExplicitReset = true;
         pendingRemoteSigPackets = {};
         const ta = document.getElementById('pasteTextArea');
         if (ta) ta.value = '';
@@ -4113,6 +4223,8 @@
           g.uploadedFiles = [];
           hasAdminUploadedDispatchInThisSession = false;
           appData.lastResetTs = Date.now();
+          appData.lastAdminEditTs = Date.now();
+          appData.isExplicitReset = true;
           pendingRemoteSigPackets = {};
           parsedUploadItems = null;
           saveState(true, true);
