@@ -1075,6 +1075,8 @@
     const PAGE_OPEN_TS = Date.now();
     let hasUrlProvidedRoster = false;
     let hasUrlProvidedAuth = false;
+    let hasUrlProvidedSessions = false;
+    let hasUrlProvidedSess = false;
     const seenHttpEventIds = new Set();
 
     // PC나 모바일에서 관리자가 핀번호(인증코드)를 변경하거나 가동 명단을 업데이트했을 때,
@@ -1437,8 +1439,9 @@
       if (payload.sessions && Array.isArray(payload.sessions) && payload.sessions.length > 0) {
         const incSessTs = payload.sessionsEditTs || 0;
         const locSessTs = appData.sessionsEditTs || 0;
-        // 교육 과정명/일자/장소/강사는 더 최신에 수정된 쪽(sessionsEditTs)만 반영하여 기본 제목으로 되돌아가는 현상 원천 차단!
-        if (incSessTs > locSessTs || (locSessTs === 0 && incSessTs === 0 && currentMode === 'worker')) {
+        // QR URL로 이미 최신 교육명을 받아온 경우(hasUrlProvidedSessions), 접속 시점 이전의 오래된 클라우드 패킷이 교육명을 덮어쓰지 않도록 보호!
+        const blockedByQr = hasUrlProvidedSessions && isOlderThanPageOpen && incSessTs <= PAGE_OPEN_TS;
+        if (!blockedByQr && (incSessTs > locSessTs || (locSessTs === 0 && incSessTs === 0 && currentMode === 'worker' && !hasUrlProvidedSessions))) {
           appData.sessions = payload.sessions;
           if (incSessTs > locSessTs) appData.sessionsEditTs = incSessTs;
           changed = true;
@@ -1446,8 +1449,10 @@
       }
 
       if (payload.activeSessionId && appData.activeSessionId !== payload.activeSessionId && !hasLocalAdminChanges) {
-        appData.activeSessionId = payload.activeSessionId;
-        changed = true;
+        if (!hasUrlProvidedSess || !isOlderThanPageOpen) {
+          appData.activeSessionId = payload.activeSessionId;
+          changed = true;
+        }
       }
 
       if (payload.customDriverNames) {
@@ -2159,6 +2164,7 @@
     const presetParam = urlParams.get('preset'); // '1111' or '1112'
     const rmaskParam = urlParams.get('rmask');   // 16자리 16진수 실시간 가동/휴무 비트마스크
     const smaskParam = urlParams.get('smask');   // 16자리 16진수 서명완료 비트마스크
+    const stParam = urlParams.get('st');         // 압축된 교육 회차 제목/일자/장소/강사 목록
 
     if (modeParam === 'admin') {
       currentMode = 'admin';
@@ -2186,8 +2192,26 @@
       activeTargetGroup = groupParam;
     }
 
+    if (stParam) {
+      try {
+        const parsedSt = JSON.parse(stParam);
+        if (Array.isArray(parsedSt) && parsedSt.length > 0) {
+          appData.sessions = parsedSt.map(arr => ({
+            id: arr[0] || ('sess-' + Date.now()),
+            title: arr[1] || '교육 회차',
+            date: arr[2] || getTodayDateStr(),
+            place: arr[3] || '원주TC / 2층교육장',
+            instructor: arr[4] || '안전관리팀'
+          }));
+          hasUrlProvidedSessions = true;
+          appData.sessionsEditTs = Date.now();
+        }
+      } catch (e) {}
+    }
+
     if (sessParam) {
       appData.activeSessionId = sessParam;
+      hasUrlProvidedSess = true;
     }
 
     // [핵심] URL 파라미터(rmask 또는 preset)로 전달된 배차표를 적용한 즉시 saveState(false, false)를 호출하여,
@@ -4357,12 +4381,13 @@
       const driverRoster = (appData.groups.driver && appData.groups.driver.roster) ? appData.groups.driver.roster : [];
       const rmaskCode = encodeDriverRosterMask(driverRoster);
       const smaskCode = encodeDriverSignedMask(driverRoster, activeSess.id);
+      const stCompact = encodeURIComponent(JSON.stringify((appData.sessions || []).map(s => [s.id, s.title, s.date, s.place, s.instructor])));
 
       let liveUrl = baseUrl;
       if (isWorker) {
-        liveUrl += `?mode=worker&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}&rmask=${rmaskCode}&auth=${currentPin}`;
+        liveUrl += `?mode=worker&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}&rmask=${rmaskCode}&auth=${currentPin}&st=${stCompact}`;
       } else {
-        liveUrl += `?mode=admin&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}&rmask=${rmaskCode}${smaskCode ? '&smask=' + smaskCode : ''}&auth=${currentPin}`;
+        liveUrl += `?mode=admin&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}&rmask=${rmaskCode}${smaskCode ? '&smask=' + smaskCode : ''}&auth=${currentPin}&st=${stCompact}`;
       }
       if (urlInput) urlInput.value = liveUrl;
 
@@ -4547,6 +4572,7 @@
       updateEduInfoDisplay();
       closeEduInfoModal();
       renderAll();
+      renderQrContent();
       showToast(`[${sess.title}] 정보가 수정되었습니다.`);
     }
 
