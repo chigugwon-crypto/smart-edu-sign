@@ -1289,8 +1289,7 @@
       Object.values(pendingRemoteSigPackets).forEach(pkt => {
         if (!pkt || !pkt.groupKey || !pkt.personKey) return;
         if (pkt.ts && appData.lastResetTs && pkt.ts < appData.lastResetTs) return;
-        const targetSessObj = (appData.sessions || []).find(s => s.id === (pkt.sessionId || getActiveSession().id));
-        if (pkt.ts && targetSessObj && targetSessObj.sigResetTs && pkt.ts < targetSessObj.sigResetTs) return;
+
         const g = appData.groups[pkt.groupKey];
         if (!g || !g.roster || g.roster.length === 0) return;
         const item = g.roster.find(r => {
@@ -1329,8 +1328,7 @@
           Object.keys(byGroup).forEach(gk => {
             const g = appData.groups[gk];
             if (!g || !g.roster) return;
-            const targetSessObj = (appData.sessions || []).find(s => s.id === sId);
-            if (payload.ts && targetSessObj && targetSessObj.sigResetTs && payload.ts < targetSessObj.sigResetTs) return;
+
             const byPerson = byGroup[gk] || {};
             g.roster.forEach(r => {
               const pk = (gk === 'driver') ? (r.carNo || r.driverName) : r.driverName;
@@ -1813,7 +1811,7 @@
           seenHttpEventIds.clear();
         }
         const sinceParam = (!fullPull && lastHttpPollTime > 15) ? String(lastHttpPollTime - 10) : '12h';
-        const url = `${HTTP_RELAY_BASE}/${HTTP_TOPIC_STATE},${HTTP_TOPIC_SIGS}/json?poll=1&since=${encodeURIComponent(sinceParam)}`;
+        const url = `${HTTP_RELAY_BASE}/${HTTP_TOPIC_STATE},${HTTP_TOPIC_SIGS}/json?poll=1&since=${encodeURIComponent(sinceParam)}&_t=${Date.now()}`;
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) return;
 
@@ -4587,9 +4585,14 @@
           });
         });
         if (!hasExistingSigs) {
-          sess.sigResetTs = Date.now();
+          const oldId = sess.id;
+          const newId = 'sess-' + Date.now();
+          sess.id = newId;
+          if (appData.activeSessionId === oldId) {
+            appData.activeSessionId = newId;
+          }
           Object.keys(pendingRemoteSigPackets).forEach(k => {
-            if (k.startsWith(sess.id + '_')) delete pendingRemoteSigPackets[k];
+            if (k.startsWith(oldId + '_')) delete pendingRemoteSigPackets[k];
           });
         }
       }
