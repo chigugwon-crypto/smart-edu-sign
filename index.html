@@ -1026,16 +1026,16 @@
     let lastSavedRawState = '';
     const DEVICE_ID = 'dev-' + Math.random().toString(36).substring(2, 9);
 
-    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v54';
+    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v56';
     const MQTT_TOPIC_STATE = MQTT_TOPIC_BASE + '/state';     // Retained: 관리자가 설정한 명단(가동/휴무), 회차, 최신 인증코드
     const MQTT_TOPIC_SIG_PREFIX = MQTT_TOPIC_BASE + '/sig/'; // Retained per person: 기사님/참석자 서명 패킷
     const MQTT_TOPIC_CMD = MQTT_TOPIC_BASE + '/cmd';         // 실시간 명령 (REQUEST_SYNC -> 관리자 폰 즉시 응답)
 
     // [핵심] 사내 PC 방화벽(삼성전자로지텍 등 웹소켓/비표준 포트 차단 환경)을 100% 통과하는 표준 HTTPS(443 포트) 실시간 클라우드 릴레이 채널!
     const HTTP_RELAY_BASE = 'https://ntfy.sh';
-    const HTTP_TOPIC_STATE = 'wonjutc_smart_edu_v54_state';
-    const HTTP_TOPIC_SIGS = 'wonjutc_smart_edu_v54_sigs';
-    const HTTP_TOPIC_CMD = 'wonjutc_smart_edu_v54_cmd';
+    const HTTP_TOPIC_STATE = 'wonjutc_smart_edu_v56_state';
+    const HTTP_TOPIC_SIGS = 'wonjutc_smart_edu_v56_sigs';
+    const HTTP_TOPIC_CMD = 'wonjutc_smart_edu_v56_cmd';
 
     let mqttClients = [];
     let activeBrokerCount = 0;
@@ -1061,6 +1061,9 @@
     // 원격 서명 패킷 임시 캐시 (PC 관리자 접속 시 STATE 패킷보다 서명 패킷이 먼저 도착하더라도 100% 누락 없이 병합!)
     let pendingRemoteSigPackets = {};
     let hasLocalAdminChanges = false;
+    const PAGE_OPEN_TS = Date.now();
+    let hasUrlProvidedRoster = false;
+    let hasUrlProvidedAuth = false;
 
     // 64대 설치기사 가동/휴무 상태를 16자리 16진수(rmask)로 초경량 압축
     function encodeDriverRosterMask(roster) {
@@ -1269,28 +1272,44 @@
     function applyRemoteStatePayload(payload) {
       if (!payload) return false;
       if (payload.ts && payload.ts < lastAppliedRemoteStateTs) return false;
+
+      // [핵심 가드레일] QR코드를 찍어 접속한 화면(hasUrlProvidedRoster=true)에서는,
+      // QR 스캔 시점(PAGE_OPEN_TS) 이전에 서버에 남아있던 오래된 패킷이 QR의 최신 명단(예: 가동 55대)이나 인증코드(예: 9097)를 덮어쓰지 못하도록 원천 차단!
+      const isOlderThanPageOpen = !payload.ts || (payload.ts < PAGE_OPEN_TS);
+      const isRemoteEmptyDriver = (payload.isCompact && payload.rmask === 'empty') ||
+        (payload.groups && payload.groups.driver && Array.isArray(payload.groups.driver.roster) && payload.groups.driver.roster.length === 0);
+
+      if (hasUrlProvidedRoster && isRemoteEmptyDriver && isOlderThanPageOpen) {
+        return false;
+      }
+
       if (payload.ts) lastAppliedRemoteStateTs = payload.ts;
 
       let changed = false;
 
       if (payload.lastResetTs && payload.lastResetTs > (appData.lastResetTs || 0)) {
-        appData.lastResetTs = payload.lastResetTs;
-        Object.keys(pendingRemoteSigPackets).forEach(k => {
-          if (pendingRemoteSigPackets[k] && pendingRemoteSigPackets[k].ts < appData.lastResetTs) {
-            delete pendingRemoteSigPackets[k];
-          }
-        });
-        changed = true;
+        if (!hasUrlProvidedRoster || payload.lastResetTs > PAGE_OPEN_TS) {
+          appData.lastResetTs = payload.lastResetTs;
+          Object.keys(pendingRemoteSigPackets).forEach(k => {
+            if (pendingRemoteSigPackets[k] && pendingRemoteSigPackets[k].ts < appData.lastResetTs) {
+              delete pendingRemoteSigPackets[k];
+            }
+          });
+          changed = true;
+        }
       }
 
       if (payload.authCode && String(payload.authCode).trim() !== String(appData.authCode).trim()) {
-        appData.authCode = String(payload.authCode).trim();
-        const hVal = document.getElementById('headerAuthCodeVal');
-        if (hVal) hVal.textContent = appData.authCode;
-        const mVal = document.getElementById('qrModalAuthCode');
-        if (mVal) mVal.textContent = appData.authCode;
-        renderQrContent();
-        changed = true;
+        // QR URL로 인증번호(?auth=9097)를 직접 받아 접속한 경우, 접속 시점 이후에 관리자가 새로 변경한 코드만 반영
+        if (!hasUrlProvidedAuth || !isOlderThanPageOpen) {
+          appData.authCode = String(payload.authCode).trim();
+          const hVal = document.getElementById('headerAuthCodeVal');
+          if (hVal) hVal.textContent = appData.authCode;
+          const mVal = document.getElementById('qrModalAuthCode');
+          if (mVal) mVal.textContent = appData.authCode;
+          renderQrContent();
+          changed = true;
+        }
       }
 
       if (payload.sessions && Array.isArray(payload.sessions) && payload.sessions.length > 0) {
@@ -1311,11 +1330,13 @@
       if (payload.isCompact) {
         const locD = appData.groups.driver;
         if (payload.rmask === 'empty') {
-          hasAdminUploadedDispatchInThisSession = false;
-          if (locD.roster.length > 0 || (locD.uploadedFiles && locD.uploadedFiles.length > 0)) {
-            locD.roster = [];
-            locD.uploadedFiles = [];
-            changed = true;
+          if (!hasUrlProvidedRoster || !isOlderThanPageOpen) {
+            hasAdminUploadedDispatchInThisSession = false;
+            if (locD.roster.length > 0 || (locD.uploadedFiles && locD.uploadedFiles.length > 0)) {
+              locD.roster = [];
+              locD.uploadedFiles = [];
+              changed = true;
+            }
           }
         } else if (payload.customDList && Array.isArray(payload.customDList)) {
           hasAdminUploadedDispatchInThisSession = true;
@@ -1404,11 +1425,13 @@
           if (!remG || !locG || !Array.isArray(remG.roster)) return;
 
           if (k === 'driver' && remG.roster.length === 0) {
-            hasAdminUploadedDispatchInThisSession = false;
-            if (locG.roster.length > 0 || (locG.uploadedFiles && locG.uploadedFiles.length > 0)) {
-              locG.roster = [];
-              locG.uploadedFiles = [];
-              changed = true;
+            if (!hasUrlProvidedRoster || !isOlderThanPageOpen) {
+              hasAdminUploadedDispatchInThisSession = false;
+              if (locG.roster.length > 0 || (locG.uploadedFiles && locG.uploadedFiles.length > 0)) {
+                locG.roster = [];
+                locG.uploadedFiles = [];
+                changed = true;
+              }
             }
             return;
           }
@@ -1716,7 +1739,7 @@
       if (typeof EventSource !== 'undefined') {
         try {
           if (httpEventSource) httpEventSource.close();
-          const sseUrl = `${HTTP_RELAY_BASE}/${HTTP_TOPIC_STATE},${HTTP_TOPIC_SIGS},${HTTP_TOPIC_CMD}/sse`;
+          const sseUrl = `${HTTP_RELAY_BASE}/${HTTP_TOPIC_STATE},${HTTP_TOPIC_SIGS},${HTTP_TOPIC_CMD}/sse?since=12h`;
           httpEventSource = new EventSource(sseUrl);
 
           httpEventSource.onopen = () => {
@@ -1771,10 +1794,12 @@
         }
       }, 600);
 
-      // 4. 사내 방화벽 프록시 환경을 위해 3초마다 표준 HTTPS 폴링으로 실시간 변경사항 자동 감지
+      // 4. 사내 방화벽 프록시 환경을 위해 8초마다 표준 HTTPS 폴링으로 실시간 변경사항 자동 감지 (Rate Limit 방지)
       setInterval(() => {
-        pullHttpRelayData(false);
-      }, 3000);
+        if (document.visibilityState === 'visible') {
+          pullHttpRelayData(false);
+        }
+      }, 8000);
     }
 
     async function pullFirebaseData() {
@@ -1850,8 +1875,10 @@
               client.subscribe(MQTT_TOPIC_CMD, { qos: 1 });
 
               const hasDriverRoster = appData.groups && appData.groups.driver && appData.groups.driver.roster && appData.groups.driver.roster.length > 0;
-              if (currentMode === 'admin' && (hasLocalAdminChanges || hasDriverRoster)) {
-                pushCloudState();
+              if ((currentMode === 'admin' && (hasLocalAdminChanges || hasDriverRoster)) || (hasUrlProvidedRoster && hasDriverRoster)) {
+                const payload = buildLightweightStatePayload();
+                client.publish(MQTT_TOPIC_STATE, JSON.stringify(payload), { qos: 1, retain: true });
+                if (currentMode === 'admin') pushCloudState();
               } else {
                 client.publish(MQTT_TOPIC_CMD, JSON.stringify({ sender: DEVICE_ID, cmd: 'REQUEST_SYNC', ts: Date.now() }), { qos: 1 });
               }
@@ -2020,6 +2047,7 @@
       const cleanPin = String(authParam).trim();
       if (cleanPin.length === 4 && !isNaN(cleanPin)) {
         appData.authCode = cleanPin;
+        hasUrlProvidedAuth = true;
       }
     }
 
@@ -2071,6 +2099,7 @@
             active: true
           }];
           hasAdminUploadedDispatchInThisSession = true;
+          hasUrlProvidedRoster = true;
         }
       }
     } else if (presetParam === '1111' || presetParam === '1112') {
@@ -2083,6 +2112,7 @@
         signatures: {}
       }));
       hasAdminUploadedDispatchInThisSession = true;
+      hasUrlProvidedRoster = true;
     }
 
     // URL 파라미터가 적용된 현재 상태를 즉시 lastSavedRawState와 localStorage에 동기화하여 덮어쓰기 방지!
