@@ -915,9 +915,13 @@
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     }
 
+    function generateRandomPin4() {
+      return String(Math.floor(1000 + Math.random() * 9000));
+    }
+
     const defaultData = {
       adminPin: '0000',
-      authCode: '7429',
+      authCode: generateRandomPin4(),
       currentMode: 'admin',
       activeSessionId: 'sess-1',
       sessions: [
@@ -1420,12 +1424,14 @@
         }
       }
 
-      // 핀번호(인증코드) 보호: 기본값 '7429'가 이미 변경된 핀번호를 덮어쓰지 못하도록 차단하고, 더 최신에 변경된 핀번호만 수용!
+      // 핀번호(인증코드) 실시간 동기화: QR로 받은 코드 또는 더 최신에 갱신된 관리자 핀번호를 정확히 반영
       if (payload.authCode && String(payload.authCode).trim() !== String(appData.authCode).trim()) {
         const incPin = String(payload.authCode).trim();
         const incPinTs = payload.pinChangedTs || 0;
         const locPinTs = appData.pinChangedTs || 0;
-        const shouldAcceptPin = (incPinTs > locPinTs) || (locPinTs === 0 && !hasUrlProvidedAuth && incPin !== '7429');
+        const shouldAcceptPin = (currentMode === 'worker')
+          ? (!hasUrlProvidedAuth || incPinTs > PAGE_OPEN_TS)
+          : (incPinTs > locPinTs);
         if (shouldAcceptPin) {
           appData.authCode = incPin;
           if (incPinTs > locPinTs) appData.pinChangedTs = incPinTs;
@@ -2104,6 +2110,7 @@
         if (pushCloud && currentMode === 'admin') {
           hasLocalAdminChanges = true;
           appData.lastAdminEditTs = Date.now();
+          if (!appData.pinChangedTs) appData.pinChangedTs = PAGE_OPEN_TS;
           if (appData.groups && appData.groups.driver && appData.groups.driver.roster && appData.groups.driver.roster.length > 0) {
             appData.isExplicitReset = false;
           }
@@ -2179,14 +2186,9 @@
     if (authParam) {
       const cleanPin = String(authParam).trim();
       if (cleanPin.length === 4 && !isNaN(cleanPin)) {
-        // 만약 PC 로컬저장소에 이미 관리자가 변경한 최신 핀번호(pinChangedTs > 0)가 있는데 주소창에 초기값 7429가 남아있는 경우 덮어쓰지 않음!
-        if (!(currentMode === 'admin' && (appData.pinChangedTs || 0) > 0 && cleanPin === '7429')) {
-          appData.authCode = cleanPin;
-          if (cleanPin !== '7429') {
-            appData.pinChangedTs = appData.pinChangedTs || Date.now();
-          }
-          hasUrlProvidedAuth = true;
-        }
+        appData.authCode = cleanPin;
+        appData.pinChangedTs = appData.pinChangedTs || Date.now();
+        hasUrlProvidedAuth = true;
       }
     }
 
