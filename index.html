@@ -831,7 +831,7 @@
 
   <script>
     // ==================== APP STATE & OFFICIAL 11/11 ROSTER DATABASE ====================
-    const STORAGE_KEY = 'edu_sign_app_state_v58';
+    const STORAGE_KEY = 'edu_sign_app_state_v59';
 
     const DEFAULT_NETLIFY_URL = "https://coruscating-kulfi-9524ef.netlify.app";
 
@@ -985,7 +985,7 @@
       }
     };
 
-    const SESSION_STORAGE_KEY = 'edu_sign_active_tab_session_v58';
+    const SESSION_STORAGE_KEY = 'edu_sign_active_tab_session_v59';
     let hasAdminUploadedDispatchInThisSession = true;
 
     let appData = JSON.parse(JSON.stringify(defaultData));
@@ -1044,16 +1044,16 @@
     let lastSavedRawState = '';
     const DEVICE_ID = 'dev-' + Math.random().toString(36).substring(2, 9);
 
-    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v58';
+    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v59';
     const MQTT_TOPIC_STATE = MQTT_TOPIC_BASE + '/state';     // Retained: 관리자가 설정한 명단(가동/휴무), 회차, 최신 인증코드
     const MQTT_TOPIC_SIG_PREFIX = MQTT_TOPIC_BASE + '/sig/'; // Retained per person: 기사님/참석자 서명 패킷
     const MQTT_TOPIC_CMD = MQTT_TOPIC_BASE + '/cmd';         // 실시간 명령 (REQUEST_SYNC -> 관리자 폰 즉시 응답)
 
     // [핵심] 사내 PC 방화벽(삼성전자로지텍 등 웹소켓/비표준 포트 차단 환경)을 100% 통과하는 표준 HTTPS(443 포트) 실시간 클라우드 릴레이 채널!
     const HTTP_RELAY_BASE = 'https://ntfy.sh';
-    const HTTP_TOPIC_STATE = 'wonjutc_smart_edu_v58_state';
-    const HTTP_TOPIC_SIGS = 'wonjutc_smart_edu_v58_sigs';
-    const HTTP_TOPIC_CMD = 'wonjutc_smart_edu_v58_cmd';
+    const HTTP_TOPIC_STATE = 'wonjutc_smart_edu_v59_state';
+    const HTTP_TOPIC_SIGS = 'wonjutc_smart_edu_v59_sigs';
+    const HTTP_TOPIC_CMD = 'wonjutc_smart_edu_v59_cmd';
 
     let mqttClients = [];
     let activeBrokerCount = 0;
@@ -1095,7 +1095,9 @@
           const dRoster = (appData.groups && appData.groups.driver && appData.groups.driver.roster) ? appData.groups.driver.roster : [];
           const rmaskCode = encodeDriverRosterMask(dRoster);
           const currentPin = String(appData.authCode || '7429').trim();
-          const newSearch = `?mode=${currentMode}&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}&rmask=${rmaskCode}&auth=${currentPin}`;
+          const newSearch = (currentMode === 'admin')
+            ? `?mode=admin`
+            : `?mode=${currentMode}&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}&rmask=${rmaskCode}&auth=${currentPin}`;
           window.history.replaceState(null, '', window.location.pathname + newSearch);
         }
       } catch (e) {}
@@ -1287,6 +1289,8 @@
       Object.values(pendingRemoteSigPackets).forEach(pkt => {
         if (!pkt || !pkt.groupKey || !pkt.personKey) return;
         if (pkt.ts && appData.lastResetTs && pkt.ts < appData.lastResetTs) return;
+        const targetSessObj = (appData.sessions || []).find(s => s.id === (pkt.sessionId || getActiveSession().id));
+        if (pkt.ts && targetSessObj && targetSessObj.sigResetTs && pkt.ts < targetSessObj.sigResetTs) return;
         const g = appData.groups[pkt.groupKey];
         if (!g || !g.roster || g.roster.length === 0) return;
         const item = g.roster.find(r => {
@@ -1325,6 +1329,8 @@
           Object.keys(byGroup).forEach(gk => {
             const g = appData.groups[gk];
             if (!g || !g.roster) return;
+            const targetSessObj = (appData.sessions || []).find(s => s.id === sId);
+            if (payload.ts && targetSessObj && targetSessObj.sigResetTs && payload.ts < targetSessObj.sigResetTs) return;
             const byPerson = byGroup[gk] || {};
             g.roster.forEach(r => {
               const pk = (gk === 'driver') ? (r.carNo || r.driverName) : r.driverName;
@@ -2177,6 +2183,10 @@
 
     if (modeParam === 'admin') {
       currentMode = 'admin';
+      if (!authParam && !sessionStorage.getItem(SESSION_STORAGE_KEY)) {
+        appData.authCode = generateRandomPin4();
+        appData.pinChangedTs = Date.now();
+      }
     } else if (modeParam === 'worker' || modeParam === 'driver') {
       currentMode = 'worker';
     } else {
@@ -2378,6 +2388,14 @@
       if (pin === expected || pin === '0000') {
         currentMode = 'admin';
         appData.currentMode = 'admin';
+        if (!hasUrlProvidedAuth && !hasUrlProvidedRoster && (!appData.lastAdminEditTs || appData.lastAdminEditTs === 0)) {
+          appData.authCode = generateRandomPin4();
+          appData.pinChangedTs = Date.now();
+          const hVal = document.getElementById('headerAuthCodeVal');
+          if (hVal) hVal.textContent = appData.authCode;
+          const mVal = document.getElementById('qrModalAuthCode');
+          if (mVal) mVal.textContent = appData.authCode;
+        }
         saveState();
         closeAdminAuthModal();
         updateTopNav();
@@ -3169,7 +3187,7 @@
     }
 
     // ==================== 1대 단말기 1회 서명 제한 (대리서명 원천 차단 엔진) ====================
-    const DEVICE_SIGN_LOCK_KEY = 'edu_device_sign_locks_v58';
+    const DEVICE_SIGN_LOCK_KEY = 'edu_device_sign_locks_v59';
 
     function getDeviceSignLocks() {
       try {
@@ -4553,10 +4571,28 @@
 
     function saveEduInfo() {
       const sess = getActiveSession();
-      sess.title = document.getElementById('editEduTitle').value.trim() || '교육 회차';
+      const prevTitle = sess.title;
+      const nextTitle = document.getElementById('editEduTitle').value.trim() || '교육 회차';
+      sess.title = nextTitle;
       sess.date = document.getElementById('editEduDate').value || getTodayDateStr();
       sess.place = document.getElementById('editEduPlace').value.trim() || '원주TC / 2층교육장';
       sess.instructor = document.getElementById('editEduInstructor').value.trim() || '안전관리팀';
+
+      // 교육 과정명이 새로 변경되었는데 현재 회차에 서명자가 0명이라면, 이전 동일 회차 ID(sess-1 등)의 잔여 서명이 섞이지 않도록 기준 시각 초기화
+      if (prevTitle !== nextTitle) {
+        let hasExistingSigs = false;
+        Object.values(appData.groups || {}).forEach(g => {
+          (g.roster || []).forEach(r => {
+            if (r.signatures && r.signatures[sess.id] && r.signatures[sess.id].signed) hasExistingSigs = true;
+          });
+        });
+        if (!hasExistingSigs) {
+          sess.sigResetTs = Date.now();
+          Object.keys(pendingRemoteSigPackets).forEach(k => {
+            if (k.startsWith(sess.id + '_')) delete pendingRemoteSigPackets[k];
+          });
+        }
+      }
 
       appData.sessionsEditTs = Date.now();
       appData.lastAdminEditTs = Date.now();
