@@ -831,7 +831,7 @@
 
   <script>
     // ==================== APP STATE & OFFICIAL 11/11 ROSTER DATABASE ====================
-    const STORAGE_KEY = 'edu_sign_app_state_v54';
+    const STORAGE_KEY = 'edu_sign_app_state_v58';
 
     const DEFAULT_NETLIFY_URL = "https://coruscating-kulfi-9524ef.netlify.app";
 
@@ -910,6 +910,11 @@
     const OFFICIAL_1112_DRIVERS = [{"id": "d-1", "carNo": "강원85자2321", "driverName": "방만수", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-2", "carNo": "강원83바1097", "driverName": "김종호", "cell": "춘천 피닉스", "area": "춘천홍천", "status": "work"}, {"id": "d-3", "carNo": "강원83바6326", "driverName": "채윤호", "cell": "춘천 피닉스", "area": "휴무", "status": "off"}, {"id": "d-4", "carNo": "강원83바1540", "driverName": "김규철", "cell": "춘천 피닉스", "area": "화천", "status": "work"}, {"id": "d-5", "carNo": "강원83바6313", "driverName": "이충모", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-6", "carNo": "강원83바6311", "driverName": "윤민호", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-7", "carNo": "강원83바6358", "driverName": "김희석", "cell": "춘천 피닉스", "area": "춘천", "status": "work"}, {"id": "d-8", "carNo": "강원83바6321", "driverName": "박도현", "cell": "춘천 피닉스", "area": "양구", "status": "work"}, {"id": "d-9", "carNo": "강원85자2328", "driverName": "차성준", "cell": "춘천 피닉스", "area": "가평청평", "status": "work"}, {"id": "d-10", "carNo": "강원83바6334", "driverName": "양승원", "cell": "춘천 피닉스", "area": "춘천가평", "status": "work"}, {"id": "d-11", "carNo": "강원85자2322", "driverName": "이주섭", "cell": "춘천 피닉스", "area": "휴무", "status": "off"}, {"id": "d-12", "carNo": "강원83바6307", "driverName": "민경재", "cell": "춘천 피닉스", "area": "휴무", "status": "off"}, {"id": "d-13", "carNo": "강원83바1050", "driverName": "조영행", "cell": "충주 이글스", "area": "충주5", "status": "work"}, {"id": "d-14", "carNo": "강원83바6323", "driverName": "이병호", "cell": "충주 이글스", "area": "충주2", "status": "work"}, {"id": "d-15", "carNo": "강원87바1701", "driverName": "김병수", "cell": "충주 이글스", "area": "괴산", "status": "work"}, {"id": "d-16", "carNo": "강원83바6306", "driverName": "구현호", "cell": "충주 이글스", "area": "충주6", "status": "work"}, {"id": "d-17", "carNo": "강원83바6337", "driverName": "김정호", "cell": "충주 이글스", "area": "충주1", "status": "work"}, {"id": "d-18", "carNo": "강원83바6354", "driverName": "김동식", "cell": "충주 이글스", "area": "음성", "status": "work"}, {"id": "d-19", "carNo": "강원80바9607", "driverName": "나관병", "cell": "충주 이글스", "area": "비가동", "status": "off"}, {"id": "d-20", "carNo": "강원83바1513", "driverName": "박상현", "cell": "충주 이글스", "area": "충주3", "status": "work"}, {"id": "d-21", "carNo": "강원83바1523", "driverName": "이대호", "cell": "충주 이글스", "area": "휴무", "status": "off"}, {"id": "d-22", "carNo": "강원83바6365", "driverName": "황정남", "cell": "충주 이글스", "area": "음성", "status": "work"}, {"id": "d-23", "carNo": "강원83바6328", "driverName": "김세동", "cell": "베스트", "area": "홍천", "status": "work"}, {"id": "d-24", "carNo": "강원83바6339", "driverName": "서광석", "cell": "베스트", "area": "양평", "status": "work"}, {"id": "d-25", "carNo": "강원83바6309", "driverName": "고승수", "cell": "베스트", "area": "휴무", "status": "off"}, {"id": "d-26", "carNo": "강원83바6302", "driverName": "전승구", "cell": "베스트", "area": "여주", "status": "work"}, {"id": "d-27", "carNo": "강원83바6366", "driverName": "이원진", "cell": "베스트", "area": "인제", "status": "work"}, {"id": "d-28", "carNo": "강원83바6316", "driverName": "김환신", "cell": "베스트", "area": "여주", "status": "work"}, {"id": "d-29", "carNo": "강원83바6319", "driverName": "김민현", "cell": "베스트", "area": "서종", "status": "work"}, {"id": "d-30", "carNo": "강원83바6336", "driverName": "함형국", "cell": "베스트", "area": "휴무", "status": "off"}, {"id": "d-31", "carNo": "강원83바1040", "driverName": "최종환", "cell": "TOP", "area": "이천시내", "status": "work"}, {"id": "d-32", "carNo": "강원83바6373", "driverName": "원용오", "cell": "TOP", "area": "이천시내", "status": "work"}, {"id": "d-33", "carNo": "강원83바1293", "driverName": "이성영", "cell": "TOP", "area": "이천시내", "status": "work"}, {"id": "d-34", "carNo": "강원83바6363", "driverName": "김영준", "cell": "TOP", "area": "부발", "status": "work"}, {"id": "d-35", "carNo": "강원83바1008", "driverName": "남동훈", "cell": "TOP", "area": "이천외곽", "status": "work"}, {"id": "d-36", "carNo": "강원83바6360", "driverName": "박수현", "cell": "TOP", "area": "장호원", "status": "work"}, {"id": "d-37", "carNo": "강원85자2323", "driverName": "김현규", "cell": "TOP", "area": "휴무", "status": "off"}, {"id": "d-38", "carNo": "강원83바6314", "driverName": "원호성", "cell": "TOP", "area": "이천외곽", "status": "work"}, {"id": "d-39", "carNo": "강원81자2896", "driverName": "지원탁", "cell": "TOP", "area": "여주", "status": "work"}, {"id": "d-40", "carNo": "강원85자2317", "driverName": "김영진", "cell": "초롱이", "area": "횡성", "status": "work"}, {"id": "d-41", "carNo": "강원83바6351", "driverName": "김완기", "cell": "초롱이", "area": "리베로", "status": "work"}, {"id": "d-42", "carNo": "강원83바1266", "driverName": "김용락", "cell": "초롱이", "area": "영월", "status": "work"}, {"id": "d-43", "carNo": "강원83바6356", "driverName": "양해준", "cell": "초롱이", "area": "단양", "status": "work"}, {"id": "d-44", "carNo": "강원83바6332", "driverName": "김태영", "cell": "초롱이", "area": "휴무", "status": "off"}, {"id": "d-45", "carNo": "강원83바6355", "driverName": "김동하", "cell": "초롱이", "area": "휴무", "status": "off"}, {"id": "d-46", "carNo": "강원83바6308", "driverName": "박선현", "cell": "초롱이", "area": "영월", "status": "work"}, {"id": "d-47", "carNo": "강원83바1093", "driverName": "안대희", "cell": "초롱이", "area": "제천", "status": "work"}, {"id": "d-48", "carNo": "강원83바6361", "driverName": "김배경", "cell": "초롱이", "area": "소물", "status": "work"}, {"id": "d-49", "carNo": "강원83바6340", "driverName": "오성원", "cell": "베이직", "area": "기업", "status": "work"}, {"id": "d-50", "carNo": "강원83바1084", "driverName": "홍선일", "cell": "베이직", "area": "단구", "status": "work"}, {"id": "d-51", "carNo": "강원83바6318", "driverName": "지명환", "cell": "베이직", "area": "문막", "status": "work"}, {"id": "d-52", "carNo": "강원86바8730", "driverName": "이재현", "cell": "베이직", "area": "단계", "status": "work"}, {"id": "d-53", "carNo": "강원85자2319", "driverName": "고도준", "cell": "베이직", "area": "행구", "status": "work"}, {"id": "d-54", "carNo": "강원83바1290", "driverName": "김다빈", "cell": "베이직", "area": "반곡", "status": "work"}, {"id": "d-55", "carNo": "강원83바6364", "driverName": "염명성", "cell": "베이직", "area": "통합", "status": "work"}, {"id": "d-56", "carNo": "강원80자1470", "driverName": "하지현", "cell": "베이직", "area": "휴무", "status": "off"}, {"id": "d-57", "carNo": "강원83바6330", "driverName": "김성전", "cell": "베이직", "area": "리베로", "status": "work"}, {"id": "d-58", "carNo": "강원83바6347", "driverName": "최용기", "cell": "소물전담", "area": "휴무", "status": "off"}, {"id": "d-59", "carNo": "강원83바6343", "driverName": "김승기", "cell": "소물전담", "area": "휴무", "status": "off"}, {"id": "d-60", "carNo": "강원83바6341", "driverName": "김봉섭", "cell": "소물전담", "area": "휴무", "status": "off"}, {"id": "d-61", "carNo": "강원83바6362", "driverName": "김태식", "cell": "소물전담", "area": "휴무", "status": "off"}, {"id": "d-62", "carNo": "강원83바6350", "driverName": "장지훈", "cell": "에어컨지원", "area": "양평", "status": "work"}, {"id": "d-63", "carNo": "강원83바6345", "driverName": "장필모", "cell": "에어컨지원", "area": "횡성", "status": "work"}, {"id": "d-64", "carNo": "강원83바6367", "driverName": "임성훈", "cell": "에어컨지원", "area": "리베로", "status": "work"}];
     const OFFICIAL_1111_DRIVERS = OFFICIAL_1111_DRIVERS_BACKUP;
 
+    function getTodayDateStr() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
     const defaultData = {
       adminPin: '0000',
       authCode: '7429',
@@ -919,14 +924,14 @@
         {
           id: 'sess-1',
           title: '1차: 정기 안전보건교육',
-          date: '2026-11-11',
+          date: getTodayDateStr(),
           place: '원주TC / 2층교육장',
           instructor: '안전관리팀'
         },
         {
           id: 'sess-2',
           title: '2차: 서비스 품질교육',
-          date: '2026-11-11',
+          date: getTodayDateStr(),
           place: '원주TC / 2층교육장',
           instructor: 'CS품질혁신팀'
         }
@@ -976,7 +981,7 @@
       }
     };
 
-    const SESSION_STORAGE_KEY = 'edu_sign_active_tab_session_v53';
+    const SESSION_STORAGE_KEY = 'edu_sign_active_tab_session_v58';
     let hasAdminUploadedDispatchInThisSession = true;
 
     let appData = JSON.parse(JSON.stringify(defaultData));
@@ -1011,6 +1016,12 @@
               });
             });
           }
+          if (Array.isArray(parsed.sessions)) {
+            const todayStr = getTodayDateStr();
+            parsed.sessions.forEach(s => {
+              if (!s.date || s.date === '2026-11-11') s.date = todayStr;
+            });
+          }
           appData = parsed;
         }
       }
@@ -1026,16 +1037,16 @@
     let lastSavedRawState = '';
     const DEVICE_ID = 'dev-' + Math.random().toString(36).substring(2, 9);
 
-    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v57';
+    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v58';
     const MQTT_TOPIC_STATE = MQTT_TOPIC_BASE + '/state';     // Retained: 관리자가 설정한 명단(가동/휴무), 회차, 최신 인증코드
     const MQTT_TOPIC_SIG_PREFIX = MQTT_TOPIC_BASE + '/sig/'; // Retained per person: 기사님/참석자 서명 패킷
     const MQTT_TOPIC_CMD = MQTT_TOPIC_BASE + '/cmd';         // 실시간 명령 (REQUEST_SYNC -> 관리자 폰 즉시 응답)
 
     // [핵심] 사내 PC 방화벽(삼성전자로지텍 등 웹소켓/비표준 포트 차단 환경)을 100% 통과하는 표준 HTTPS(443 포트) 실시간 클라우드 릴레이 채널!
     const HTTP_RELAY_BASE = 'https://ntfy.sh';
-    const HTTP_TOPIC_STATE = 'wonjutc_smart_edu_v57_state';
-    const HTTP_TOPIC_SIGS = 'wonjutc_smart_edu_v57_sigs';
-    const HTTP_TOPIC_CMD = 'wonjutc_smart_edu_v57_cmd';
+    const HTTP_TOPIC_STATE = 'wonjutc_smart_edu_v58_state';
+    const HTTP_TOPIC_SIGS = 'wonjutc_smart_edu_v58_sigs';
+    const HTTP_TOPIC_CMD = 'wonjutc_smart_edu_v58_cmd';
 
     let mqttClients = [];
     let activeBrokerCount = 0;
@@ -1059,7 +1070,7 @@
     }
 
     // 원격 서명 패킷 임시 캐시 (PC 관리자 접속 시 STATE 패킷보다 서명 패킷이 먼저 도착하더라도 100% 누락 없이 병합!)
-    let pendingRemoteSigPackets = {};
+    let pendingRemoteSigPackets = {}; try { localStorage.removeItem(DEVICE_SIGN_LOCK_KEY); } catch (e) {}
     let hasLocalAdminChanges = false;
     const PAGE_OPEN_TS = Date.now();
     let hasUrlProvidedRoster = false;
@@ -1193,6 +1204,7 @@
         sender: DEVICE_ID,
         ts: appData.lastAdminEditTs || Date.now(),
         lastAdminEditTs: appData.lastAdminEditTs || 0,
+        sessionsEditTs: appData.sessionsEditTs || 0,
         pinChangedTs: appData.pinChangedTs || 0,
         lastResetTs: appData.lastResetTs || 0,
         isExplicitReset: Boolean(appData.isExplicitReset && dRoster.length === 0),
@@ -1247,6 +1259,7 @@
         sender: DEVICE_ID,
         ts: appData.lastAdminEditTs || Date.now(),
         lastAdminEditTs: appData.lastAdminEditTs || 0,
+        sessionsEditTs: appData.sessionsEditTs || 0,
         pinChangedTs: appData.pinChangedTs || 0,
         lastResetTs: appData.lastResetTs || 0,
         isExplicitReset: Boolean(appData.isExplicitReset && (!appData.groups.driver.roster || appData.groups.driver.roster.length === 0)),
@@ -1295,8 +1308,9 @@
       if (!payload) return false;
       let changed = false;
 
-      // [1단계] 서명 데이터(sigMap / sigMeta)는 패킷 시각과 무관하게 언제나 먼저 병합하여 CSM/기사님 서명이 절대 누락되지 않도록 보장!
-      if (payload.sigMap) {
+      // [1단계] 서명 데이터(sigMap / sigMeta) 병합 (단, 마지막 초기화 시각 이전의 오래된 서명은 제외)
+      const isBeforeReset = payload.ts && appData.lastResetTs && (payload.ts < appData.lastResetTs);
+      if (payload.sigMap && !isBeforeReset) {
         Object.keys(payload.sigMap).forEach(sId => {
           const byGroup = payload.sigMap[sId] || {};
           Object.keys(byGroup).forEach(gk => {
@@ -1321,7 +1335,7 @@
         });
       }
 
-      if (payload.groups) {
+      if (payload.groups && !isBeforeReset) {
         ['driver', 'staff', 'warehouse_day', 'warehouse_night'].forEach(gk => {
           const remG = payload.groups[gk];
           const locG = appData.groups[gk];
@@ -1421,8 +1435,14 @@
       }
 
       if (payload.sessions && Array.isArray(payload.sessions) && payload.sessions.length > 0) {
-        appData.sessions = payload.sessions;
-        changed = true;
+        const incSessTs = payload.sessionsEditTs || 0;
+        const locSessTs = appData.sessionsEditTs || 0;
+        // 교육 과정명/일자/장소/강사는 더 최신에 수정된 쪽(sessionsEditTs)만 반영하여 기본 제목으로 되돌아가는 현상 원천 차단!
+        if (incSessTs > locSessTs || (locSessTs === 0 && incSessTs === 0 && currentMode === 'worker')) {
+          appData.sessions = payload.sessions;
+          if (incSessTs > locSessTs) appData.sessionsEditTs = incSessTs;
+          changed = true;
+        }
       }
 
       if (payload.activeSessionId && appData.activeSessionId !== payload.activeSessionId && !hasLocalAdminChanges) {
@@ -1581,8 +1601,13 @@
     }
 
     function makeFallbackStampSvg(nameText) {
-      const clean = nameText || '서명완료';
-      return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40"><text x="10" y="26" font-family="sans-serif" font-size="16" font-weight="bold" fill="%230f172a">' + encodeURIComponent(clean) + '</text></svg>';
+      const clean = String(nameText || '서명완료').replace(/[<>&"']/g, '');
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40"><text x="60" y="26" text-anchor="middle" font-family="sans-serif" font-size="16" font-weight="bold" fill="#0f172a">${clean}</text></svg>`;
+      try {
+        return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+      } catch (e) {
+        return '';
+      }
     }
 
     // 원격에서 개별 참석자 서명 패킷 수신 시 즉시 반영!
@@ -1639,17 +1664,17 @@
     function compressSignatureCanvas(srcCanvas) {
       try {
         const tmp = document.createElement('canvas');
-        tmp.width = 140;
-        tmp.height = 56;
+        tmp.width = 120;
+        tmp.height = 48;
         const tctx = tmp.getContext('2d');
         tctx.fillStyle = '#ffffff';
         tctx.fillRect(0, 0, tmp.width, tmp.height);
         tctx.drawImage(srcCanvas, 0, 0, tmp.width, tmp.height);
-        const jpg = tmp.toDataURL('image/jpeg', 0.55);
-        if (jpg && jpg.length < 2400) return jpg;
-        return tmp.toDataURL('image/jpeg', 0.35);
+        const jpg = tmp.toDataURL('image/jpeg', 0.45);
+        if (jpg && jpg.length < 2200) return jpg;
+        return tmp.toDataURL('image/jpeg', 0.28);
       } catch (e) {
-        return srcCanvas ? srcCanvas.toDataURL('image/png') : '';
+        return srcCanvas ? srcCanvas.toDataURL('image/jpeg', 0.35) : '';
       }
     }
 
@@ -2420,7 +2445,7 @@
           {
             id: 'sess-1',
             title: '1차: 정기 안전보건교육',
-            date: '2026-11-11',
+            date: getTodayDateStr(),
             place: '원주TC / 2층교육장',
             instructor: '안전관리팀'
           }
@@ -2491,7 +2516,7 @@
     function openAddSessionModal() {
       const nextNum = (appData.sessions ? appData.sessions.length : 1) + 1;
       document.getElementById('newSessionTitle').value = `${nextNum}차`;
-      document.getElementById('newSessionDate').value = '2026-11-11';
+      document.getElementById('newSessionDate').value = getTodayDateStr();
       document.getElementById('newSessionPlace').value = '원주TC / 2층교육장';
       document.getElementById('newSessionInstructor').value = '안전관리팀';
       document.getElementById('addSessionModal').classList.remove('hidden');
@@ -2503,7 +2528,7 @@
 
     function saveNewSession() {
       const title = document.getElementById('newSessionTitle').value.trim() || '새 교육 회차';
-      const date = document.getElementById('newSessionDate').value || '2026-11-11';
+      const date = document.getElementById('newSessionDate').value || getTodayDateStr();
       const place = document.getElementById('newSessionPlace').value.trim() || '원주TC / 2층교육장';
       const instructor = document.getElementById('newSessionInstructor').value.trim() || '안전관리팀';
 
@@ -2519,7 +2544,9 @@
 
       appData.sessions.push(newSession);
       appData.activeSessionId = newId;
-      saveState();
+      appData.sessionsEditTs = Date.now();
+      appData.lastAdminEditTs = Date.now();
+      saveState(true, true);
 
       closeAddSessionModal();
       updateEduInfoDisplay();
@@ -2539,7 +2566,9 @@
         const deletedTitle = appData.sessions[idx].title;
         appData.sessions.splice(idx, 1);
         appData.activeSessionId = appData.sessions[0].id;
-        saveState();
+        appData.sessionsEditTs = Date.now();
+        appData.lastAdminEditTs = Date.now();
+        saveState(true, true);
         updateEduInfoDisplay();
         renderAll();
         showToast(`[${deletedTitle}] 회차가 삭제되었습니다.`);
@@ -3124,7 +3153,7 @@
     }
 
     // ==================== 1대 단말기 1회 서명 제한 (대리서명 원천 차단 엔진) ====================
-    const DEVICE_SIGN_LOCK_KEY = 'edu_device_sign_locks_v54';
+    const DEVICE_SIGN_LOCK_KEY = 'edu_device_sign_locks_v58';
 
     function getDeviceSignLocks() {
       try {
@@ -4189,7 +4218,7 @@
         appData.lastResetTs = Date.now();
         appData.lastAdminEditTs = Date.now();
         appData.isExplicitReset = true;
-        pendingRemoteSigPackets = {};
+        pendingRemoteSigPackets = {}; try { localStorage.removeItem(DEVICE_SIGN_LOCK_KEY); } catch (e) {}
         const ta = document.getElementById('pasteTextArea');
         if (ta) ta.value = '';
         parsedUploadItems = { group: 'driver', roster: [] };
@@ -4225,7 +4254,7 @@
           appData.lastResetTs = Date.now();
           appData.lastAdminEditTs = Date.now();
           appData.isExplicitReset = true;
-          pendingRemoteSigPackets = {};
+          pendingRemoteSigPackets = {}; try { localStorage.removeItem(DEVICE_SIGN_LOCK_KEY); } catch (e) {}
           parsedUploadItems = null;
           saveState(true, true);
           activeTargetGroup = 'driver';
@@ -4495,7 +4524,7 @@
     function openEduInfoModal() {
       const sess = getActiveSession();
       document.getElementById('editEduTitle').value = sess.title;
-      document.getElementById('editEduDate').value = sess.date;
+      document.getElementById('editEduDate').value = (!sess.date || sess.date === '2026-11-11') ? getTodayDateStr() : sess.date;
       document.getElementById('editEduPlace').value = sess.place;
       document.getElementById('editEduInstructor').value = sess.instructor;
       document.getElementById('eduInfoModal').classList.remove('hidden');
@@ -4508,11 +4537,13 @@
     function saveEduInfo() {
       const sess = getActiveSession();
       sess.title = document.getElementById('editEduTitle').value.trim() || '교육 회차';
-      sess.date = document.getElementById('editEduDate').value || '2026-11-11';
+      sess.date = document.getElementById('editEduDate').value || getTodayDateStr();
       sess.place = document.getElementById('editEduPlace').value.trim() || '원주TC / 2층교육장';
       sess.instructor = document.getElementById('editEduInstructor').value.trim() || '안전관리팀';
 
-      saveState();
+      appData.sessionsEditTs = Date.now();
+      appData.lastAdminEditTs = Date.now();
+      saveState(true, true);
       updateEduInfoDisplay();
       closeEduInfoModal();
       renderAll();
@@ -4716,7 +4747,7 @@
 
             <div class="mt-2 pt-1 border-t border-gray-400 text-[8px] text-gray-600 flex justify-between items-center">
               <span>${footerNote}</span>
-              <span>출력일시: 2026-11-11 · 원주TC</span>
+              <span>출력일시: ${getTodayDateStr()} · 원주TC</span>
             </div>
           </div>
         `;
