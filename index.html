@@ -1931,7 +1931,7 @@
               }
               // 이전 상태 메시지에 들어있는 서명 메타데이터도 누락 없이 병합
               if (data.sigMap) {
-                applyRemoteStatePayload({ sigMap: data.sigMap });
+                applyRemoteStatePayload({ eduEpoch: data.eduEpoch, ts: data.ts, sigMap: data.sigMap });
               }
             } else if (ev.topic === HTTP_TOPIC_SIGS) {
               sigMsgs.push(data);
@@ -3501,7 +3501,7 @@
         sigData = canvas ? compressSignatureCanvas(canvas) : '';
       } catch (err) {
         const nameText = currentSigningItem.driverName || currentSigningItem.carNo;
-        sigData = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40"><text x="10" y="25" font-family="sans-serif" font-size="16" font-weight="bold" fill="%230f172a">' + encodeURIComponent(nameText) + '</text></svg>';
+        sigData = makeFallbackStampSvg(nameText);
       }
 
       const now = new Date();
