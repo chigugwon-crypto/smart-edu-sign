@@ -831,7 +831,7 @@
 
   <script>
     // ==================== APP STATE & OFFICIAL 11/11 ROSTER DATABASE ====================
-    const STORAGE_KEY = 'edu_sign_app_state_v59';
+    const STORAGE_KEY = 'edu_sign_app_state_v60';
 
     const DEFAULT_NETLIFY_URL = "https://coruscating-kulfi-9524ef.netlify.app";
 
@@ -919,9 +919,14 @@
       return String(Math.floor(1000 + Math.random() * 9000));
     }
 
+    function generateEduEpoch() {
+      return 'ep-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
+    }
+
     const defaultData = {
       adminPin: '0000',
       authCode: generateRandomPin4(),
+      eduEpoch: generateEduEpoch(),
       currentMode: 'admin',
       activeSessionId: 'sess-1',
       sessions: [
@@ -985,7 +990,7 @@
       }
     };
 
-    const SESSION_STORAGE_KEY = 'edu_sign_active_tab_session_v59';
+    const SESSION_STORAGE_KEY = 'edu_sign_active_tab_session_v60';
     let hasAdminUploadedDispatchInThisSession = true;
 
     let appData = JSON.parse(JSON.stringify(defaultData));
@@ -1044,16 +1049,16 @@
     let lastSavedRawState = '';
     const DEVICE_ID = 'dev-' + Math.random().toString(36).substring(2, 9);
 
-    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v59';
+    const MQTT_TOPIC_BASE = 'wonjutc_smart_edu_sync_2026_v60';
     const MQTT_TOPIC_STATE = MQTT_TOPIC_BASE + '/state';     // Retained: 관리자가 설정한 명단(가동/휴무), 회차, 최신 인증코드
     const MQTT_TOPIC_SIG_PREFIX = MQTT_TOPIC_BASE + '/sig/'; // Retained per person: 기사님/참석자 서명 패킷
     const MQTT_TOPIC_CMD = MQTT_TOPIC_BASE + '/cmd';         // 실시간 명령 (REQUEST_SYNC -> 관리자 폰 즉시 응답)
 
     // [핵심] 사내 PC 방화벽(삼성전자로지텍 등 웹소켓/비표준 포트 차단 환경)을 100% 통과하는 표준 HTTPS(443 포트) 실시간 클라우드 릴레이 채널!
     const HTTP_RELAY_BASE = 'https://ntfy.sh';
-    const HTTP_TOPIC_STATE = 'wonjutc_smart_edu_v59_state';
-    const HTTP_TOPIC_SIGS = 'wonjutc_smart_edu_v59_sigs';
-    const HTTP_TOPIC_CMD = 'wonjutc_smart_edu_v59_cmd';
+    const HTTP_TOPIC_STATE = 'wonjutc_smart_edu_v60_state';
+    const HTTP_TOPIC_SIGS = 'wonjutc_smart_edu_v60_sigs';
+    const HTTP_TOPIC_CMD = 'wonjutc_smart_edu_v60_cmd';
 
     let mqttClients = [];
     let activeBrokerCount = 0;
@@ -1084,6 +1089,7 @@
     let hasUrlProvidedAuth = false;
     let hasUrlProvidedSessions = false;
     let hasUrlProvidedSess = false;
+    let hasUrlProvidedEpoch = false;
     const seenHttpEventIds = new Set();
 
     // PC나 모바일에서 관리자가 핀번호(인증코드)를 변경하거나 가동 명단을 업데이트했을 때,
@@ -1219,6 +1225,7 @@
         pinChangedTs: appData.pinChangedTs || 0,
         lastResetTs: appData.lastResetTs || 0,
         isExplicitReset: Boolean(appData.isExplicitReset && dRoster.length === 0),
+        eduEpoch: appData.eduEpoch || '',
         authCode: String(appData.authCode || '7429').trim(),
         activeSessionId: appData.activeSessionId || 'sess-1',
         activeTargetGroup: activeTargetGroup || 'driver',
@@ -1275,6 +1282,7 @@
         lastResetTs: appData.lastResetTs || 0,
         isExplicitReset: Boolean(appData.isExplicitReset && (!appData.groups.driver.roster || appData.groups.driver.roster.length === 0)),
         isLiveAdminPush: hasAdminUploadedDispatchInThisSession,
+        eduEpoch: appData.eduEpoch || '',
         authCode: String(appData.authCode || '7429').trim(),
         activeSessionId: appData.activeSessionId || 'sess-1',
         activeTargetGroup: activeTargetGroup || 'driver',
@@ -1288,6 +1296,8 @@
       let anyApplied = false;
       Object.values(pendingRemoteSigPackets).forEach(pkt => {
         if (!pkt || !pkt.groupKey || !pkt.personKey) return;
+        if (appData.eduEpoch && pkt.eduEpoch && pkt.eduEpoch !== appData.eduEpoch) return;
+        if (appData.eduEpoch && !pkt.eduEpoch) return;
         if (pkt.ts && appData.lastResetTs && pkt.ts < appData.lastResetTs) return;
 
         const g = appData.groups[pkt.groupKey];
@@ -1320,8 +1330,9 @@
       if (!payload) return false;
       let changed = false;
 
-      // [1단계] 서명 데이터(sigMap / sigMeta) 병합 (단, 마지막 초기화 시각 이전의 오래된 서명은 제외)
-      const isBeforeReset = payload.ts && appData.lastResetTs && (payload.ts < appData.lastResetTs);
+      // [1단계] 서명 데이터(sigMap / sigMeta) 병합 (같은 eduEpoch일 때만 병합하여 이전 교육 서명 유입 원천 차단!)
+      const isSameEpoch = !appData.eduEpoch || !payload.eduEpoch || (payload.eduEpoch === appData.eduEpoch);
+      const isBeforeReset = (payload.ts && appData.lastResetTs && (payload.ts < appData.lastResetTs)) || !isSameEpoch;
       if (payload.sigMap && !isBeforeReset) {
         Object.keys(payload.sigMap).forEach(sId => {
           const byGroup = payload.sigMap[sId] || {};
@@ -1424,6 +1435,21 @@
               delete pendingRemoteSigPackets[k];
             }
           });
+          changed = true;
+        }
+      }
+
+      // 교육 고유 ID(eduEpoch) 동기화: QR(?ep=...)로 접속한 경우 QR의 eduEpoch를 유지하고, 일반 링크로 접속한 경우 최신 관리자 eduEpoch를 수용
+      if (payload.eduEpoch && payload.eduEpoch !== appData.eduEpoch) {
+        const incEditTs = payload.lastAdminEditTs || payload.ts || 0;
+        const locEditTs = appData.lastAdminEditTs || 0;
+        if (!hasUrlProvidedEpoch && (currentMode === 'worker' || incEditTs > locEditTs)) {
+          appData.eduEpoch = payload.eduEpoch;
+          // 새 eduEpoch로 전환되었으므로 이전 로컬 서명 잠재 기록 초기화
+          Object.values(appData.groups || {}).forEach(g => {
+            (g.roster || []).forEach(r => { r.signatures = {}; r.signed = false; r.sigData = null; r.sigTime = null; });
+          });
+          pendingRemoteSigPackets = {};
           changed = true;
         }
       }
@@ -1631,6 +1657,8 @@
     // 원격에서 개별 참석자 서명 패킷 수신 시 즉시 반영!
     function applyRemoteSignaturePacket(pkt) {
       if (!pkt || !pkt.groupKey || !pkt.personKey) return;
+      // [핵심 격리] 현재 교육 회차 고유 ID(eduEpoch)가 다르면 이전 교육의 잔여 서명(설치기사/스탭/보관주간/야간 모두)을 100% 차단!
+      if (appData.eduEpoch && pkt.eduEpoch !== appData.eduEpoch) return;
       if (pkt.ts && appData.lastResetTs && pkt.ts < appData.lastResetTs) return;
 
       const targetSessId = pkt.sessionId || getActiveSession().id;
@@ -1746,6 +1774,7 @@
       const pkt = {
         sender: DEVICE_ID,
         ts: Date.now(),
+        eduEpoch: appData.eduEpoch || '',
         isLiveAdminPush: hasAdminUploadedDispatchInThisSession,
         action: action,
         groupKey: groupKey,
@@ -2192,6 +2221,7 @@
     const rmaskParam = urlParams.get('rmask');   // 16자리 16진수 실시간 가동/휴무 비트마스크
     const smaskParam = urlParams.get('smask');   // 16자리 16진수 서명완료 비트마스크
     const stParam = urlParams.get('st');         // 압축된 교육 회차 제목/일자/장소/강사 목록
+    const epParam = urlParams.get('ep');         // 현재 교육 고유 실행 ID(eduEpoch)
 
     if (modeParam === 'admin') {
       currentMode = 'admin';
@@ -2233,6 +2263,11 @@
           appData.sessionsEditTs = Date.now();
         }
       } catch (e) {}
+    }
+
+    if (epParam) {
+      appData.eduEpoch = epParam;
+      hasUrlProvidedEpoch = true;
     }
 
     if (sessParam) {
@@ -2402,6 +2437,7 @@
         appData.currentMode = 'admin';
         if (!hasUrlProvidedAuth && !hasUrlProvidedRoster && (!appData.lastAdminEditTs || appData.lastAdminEditTs === 0)) {
           appData.authCode = generateRandomPin4();
+          appData.eduEpoch = generateEduEpoch();
           appData.pinChangedTs = Date.now();
           const hVal = document.getElementById('headerAuthCodeVal');
           if (hVal) hVal.textContent = appData.authCode;
@@ -3199,7 +3235,7 @@
     }
 
     // ==================== 1대 단말기 1회 서명 제한 (대리서명 원천 차단 엔진) ====================
-    const DEVICE_SIGN_LOCK_KEY = 'edu_device_sign_locks_v59';
+    const DEVICE_SIGN_LOCK_KEY = 'edu_device_sign_locks_v60';
 
     function getDeviceSignLocks() {
       try {
@@ -3212,14 +3248,14 @@
 
     function getDeviceLockForSession(sessionId, groupKey) {
       const locks = getDeviceSignLocks();
-      const key = `${sessionId}_${groupKey}`;
+      const key = `${appData.eduEpoch || 'default'}_${sessionId}_${groupKey}`;
       return locks[key] || null;
     }
 
     function setDeviceLockForSession(sessionId, groupKey, item) {
       try {
         const locks = getDeviceSignLocks();
-        const key = `${sessionId}_${groupKey}`;
+        const key = `${appData.eduEpoch || 'default'}_${sessionId}_${groupKey}`;
         const personKey = (groupKey === 'driver') ? (item.carNo || item.driverName) : item.driverName;
         locks[key] = {
           itemId: item.id,
@@ -3235,7 +3271,7 @@
     function clearDeviceLockForSessionIfMatch(sessionId, groupKey, item) {
       try {
         const locks = getDeviceSignLocks();
-        const key = `${sessionId}_${groupKey}`;
+        const key = `${appData.eduEpoch || 'default'}_${sessionId}_${groupKey}`;
         const existing = locks[key];
         if (!existing) return;
         const personKey = item ? ((groupKey === 'driver') ? (item.carNo || item.driverName) : item.driverName) : null;
@@ -4406,10 +4442,11 @@
       const stCompact = encodeURIComponent(JSON.stringify((appData.sessions || []).map(s => [s.id, s.title, s.date, s.place, s.instructor])));
 
       let liveUrl = baseUrl;
+      const epParamStr = appData.eduEpoch ? `&ep=${encodeURIComponent(appData.eduEpoch)}` : '';
       if (isWorker) {
-        liveUrl += `?mode=worker&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}&rmask=${rmaskCode}&auth=${currentPin}&st=${stCompact}`;
+        liveUrl += `?mode=worker&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}&rmask=${rmaskCode}&auth=${currentPin}${epParamStr}&st=${stCompact}`;
       } else {
-        liveUrl += `?mode=admin&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}&rmask=${rmaskCode}${smaskCode ? '&smask=' + smaskCode : ''}&auth=${currentPin}&st=${stCompact}`;
+        liveUrl += `?mode=admin&group=${activeTargetGroup}&sess=${encodeURIComponent(activeSess.id)}&rmask=${rmaskCode}${smaskCode ? '&smask=' + smaskCode : ''}&auth=${currentPin}${epParamStr}&st=${stCompact}`;
       }
       if (urlInput) urlInput.value = liveUrl;
 
