@@ -2227,7 +2227,9 @@
       currentMode = 'admin';
       if (!authParam && !sessionStorage.getItem(SESSION_STORAGE_KEY)) {
         appData.authCode = generateRandomPin4();
+        appData.eduEpoch = generateEduEpoch();
         appData.pinChangedTs = Date.now();
+        appData.lastAdminEditTs = Date.now();
       }
     } else if (modeParam === 'worker' || modeParam === 'driver') {
       currentMode = 'worker';
@@ -2435,14 +2437,16 @@
       if (pin === expected || pin === '0000') {
         currentMode = 'admin';
         appData.currentMode = 'admin';
-        if (!hasUrlProvidedAuth && !hasUrlProvidedRoster && (!appData.lastAdminEditTs || appData.lastAdminEditTs === 0)) {
+        if (!hasLocalAdminChanges && modeParam !== 'admin') {
           appData.authCode = generateRandomPin4();
           appData.eduEpoch = generateEduEpoch();
           appData.pinChangedTs = Date.now();
+          appData.lastAdminEditTs = Date.now();
           const hVal = document.getElementById('headerAuthCodeVal');
           if (hVal) hVal.textContent = appData.authCode;
           const mVal = document.getElementById('qrModalAuthCode');
           if (mVal) mVal.textContent = appData.authCode;
+          renderQrContent();
         }
         saveState();
         closeAdminAuthModal();
@@ -3029,8 +3033,6 @@
               if (stillSigned) {
                 isDeviceLockedForOther = true;
                 lockedOwnerLabel = lockInfo.driverName || lockInfo.carNo || '';
-              } else {
-                clearDeviceLockForSessionIfMatch(activeSess.id, activeTargetGroup, null);
               }
             }
           }
@@ -3239,11 +3241,17 @@
 
     function getDeviceSignLocks() {
       try {
-        const raw = localStorage.getItem(DEVICE_SIGN_LOCK_KEY);
+        const raw = localStorage.getItem(DEVICE_SIGN_LOCK_KEY) || sessionStorage.getItem(DEVICE_SIGN_LOCK_KEY);
         return raw ? JSON.parse(raw) : {};
       } catch (e) {
         return {};
       }
+    }
+
+    function saveDeviceSignLocks(locks) {
+      const raw = JSON.stringify(locks);
+      try { localStorage.setItem(DEVICE_SIGN_LOCK_KEY, raw); } catch (e) {}
+      try { sessionStorage.setItem(DEVICE_SIGN_LOCK_KEY, raw); } catch (e) {}
     }
 
     function getDeviceLockForSession(sessionId, groupKey) {
@@ -3264,7 +3272,7 @@
           driverName: item.driverName || '',
           ts: Date.now()
         };
-        localStorage.setItem(DEVICE_SIGN_LOCK_KEY, JSON.stringify(locks));
+        saveDeviceSignLocks(locks);
       } catch (e) {}
     }
 
@@ -3277,7 +3285,7 @@
         const personKey = item ? ((groupKey === 'driver') ? (item.carNo || item.driverName) : item.driverName) : null;
         if (!item || existing.itemId === item.id || existing.personKey === personKey || existing.driverName === item.driverName) {
           delete locks[key];
-          localStorage.setItem(DEVICE_SIGN_LOCK_KEY, JSON.stringify(locks));
+          saveDeviceSignLocks(locks);
         }
       } catch (e) {}
     }
