@@ -565,8 +565,8 @@
   </div>
 
   <!-- 3. Dual QR Modal (Worker vs Admin) -->
-  <div id="qrModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden no-print">
-    <div class="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-200 flex flex-col" style="max-height:92vh;max-height:92dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+  <div id="qrModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 pb-14 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-200 flex flex-col overflow-hidden" style="max-height:82vh;max-height:82dvh;">
       <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
         <div class="flex items-center gap-2">
           <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-xs">
@@ -582,7 +582,7 @@
         </button>
       </div>
 
-      <div class="p-4 space-y-3 text-center">
+      <div class="p-4 pb-12 space-y-3 text-center overflow-y-auto flex-1" style="-webkit-overflow-scrolling:touch;">
         <div class="flex rounded-xl bg-slate-100 p-1 border border-slate-200">
           <button type="button" onclick="switchQrTab('worker')" id="qrTab_worker" class="flex-1 py-1.5 rounded-lg text-xs font-black bg-white text-slate-900 shadow-xs flex items-center justify-center gap-1.5">
             <i class="fa-solid fa-truck text-emerald-600"></i> 현장 서명용 QR
@@ -651,25 +651,27 @@
             <span>🌐 배포 도메인 및 서버 DB 설정</span>
             <span class="text-[10px] text-blue-600 font-normal">설정/확인</span>
           </summary>
-          <div class="mt-2 space-y-2">
-            <div>
-              <p class="text-[10px] text-slate-500 mb-1">1. 배포된 Netlify 주소 (QR코드 기본 연결 주소):</p>
+          <div class="mt-2 space-y-2.5">
+            <div class="bg-amber-50/70 border border-amber-200 rounded-lg p-2">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-[10px] font-bold text-amber-900">1. 실시간 연결 상태 진단</p>
+                <button type="button" onclick="runSyncDiagnostics()" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-black text-[11px] rounded-lg shadow-2xs shrink-0">연결 진단 실행</button>
+              </div>
+              <pre id="syncDiagResult" class="mt-1.5 text-[10px] font-mono bg-white border border-amber-200 rounded-lg p-2 whitespace-pre-wrap hidden"></pre>
+            </div>
+            <div class="pt-1.5 border-t border-slate-200">
+              <p class="text-[10px] text-slate-500 mb-1">2. 배포된 Netlify 주소 (QR코드 기본 연결 주소):</p>
               <div class="flex gap-1">
                 <input type="text" id="customDomainInput" placeholder="https://coruscating-kulfi-9524ef.netlify.app" class="flex-1 text-xs font-mono bg-white border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500">
                 <button type="button" onclick="saveCustomDomain()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg shrink-0">저장</button>
               </div>
             </div>
             <div class="pt-1.5 border-t border-slate-200">
-              <p class="text-[10px] text-slate-500 mb-1">2. (선택) Firebase 실시간 DB 주소 (미입력 시 기본 실시간 브로커 자동 작동):</p>
+              <p class="text-[10px] text-slate-500 mb-1">3. (선택) Firebase 실시간 DB 주소 (미입력 시 기본 실시간 브로커 자동 작동):</p>
               <div class="flex gap-1">
                 <input type="text" id="customFirebaseInput" placeholder="https://본인프로젝트.firebaseio.com" class="flex-1 text-xs font-mono bg-white border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500">
                 <button type="button" onclick="saveCustomFirebaseUrl()" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shrink-0">연결</button>
               </div>
-            </div>
-            <div class="pt-1.5 border-t border-slate-200">
-              <p class="text-[10px] text-slate-500 mb-1">3. 연결 진단 (이 기기에서 어떤 실시간 통로가 막혔는지 확인):</p>
-              <button type="button" onclick="runSyncDiagnostics()" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-lg">연결 진단 실행</button>
-              <pre id="syncDiagResult" class="mt-1.5 text-[10px] font-mono bg-white border border-slate-200 rounded-lg p-2 whitespace-pre-wrap hidden"></pre>
             </div>
           </div>
         </details>
