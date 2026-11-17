@@ -24,7 +24,7 @@
     @media print {
       @page {
         size: A4 portrait;
-        margin: 6mm 8mm 6mm 8mm;
+        margin: 20mm 15mm 18mm 15mm;
       }
       html, body {
         background: white !important;
@@ -731,8 +731,12 @@
           <input type="text" id="newSessionTitle" placeholder="예: 3차: 직무역량 강화교육 또는 4차" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none">
         </div>
         <div>
-          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">기준일자</label>
-          <input type="date" id="newSessionDate" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none">
+          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">교육 일자</label>
+          <input type="date" id="newSessionDate" style="height: 36px; box-sizing: border-box; -webkit-appearance: none; appearance: none;" class="w-full max-w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none block">
+        </div>
+        <div>
+          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">교육 시간</label>
+          <input type="text" id="newSessionTime" style="height: 36px; box-sizing: border-box;" value="13:00 ~ 14:00" placeholder="예: 08:30 ~ 09:30 또는 13:00 ~ 14:00" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none block">
         </div>
         <div>
           <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">교육 장소</label>
@@ -752,7 +756,7 @@
   </div>
 
   <!-- 5. Education Information Edit Modal -->
-  <div id="eduInfoModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden no-print">
+  <div id="eduInfoModal" style="z-index: 60;" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden no-print">
     <div class="bg-white rounded-2xl max-w-xs w-full shadow-2xl border border-slate-200 p-4 space-y-3">
       <div class="flex items-center justify-between pb-1.5 border-b border-slate-100">
         <h3 class="text-xs font-black text-slate-900">교육 세션 정보 수정</h3>
@@ -765,16 +769,32 @@
           <input type="text" id="editEduTitle" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs">
         </div>
         <div>
-          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">기준일자</label>
-          <input type="date" id="editEduDate" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs">
+          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">교육 일자</label>
+          <input type="date" id="editEduDate" style="height: 36px; box-sizing: border-box; -webkit-appearance: none; appearance: none;" class="w-full max-w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium text-xs block">
         </div>
         <div>
-          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">교육 장소</label>
-          <input type="text" id="editEduPlace" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs">
+          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">교육 시간</label>
+          <input type="text" id="editEduTime" style="height: 36px; box-sizing: border-box;" placeholder="예: 08:30 ~ 09:30 또는 13:00 ~ 14:00" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium text-xs block">
         </div>
-        <div>
-          <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">강사 / 주관부서</label>
-          <input type="text" id="editEduInstructor" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-medium text-xs">
+        <div class="grid grid-cols-2 gap-2">
+          <div class="min-w-0">
+            <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">교육 장소</label>
+            <input type="text" id="editEduPlace" style="height: 36px; box-sizing: border-box;" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium text-xs block">
+          </div>
+          <div class="min-w-0">
+            <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">교육 강사</label>
+            <input type="text" id="editEduInstructor" style="height: 36px; box-sizing: border-box;" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium text-xs block">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="min-w-0">
+            <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">회사명 (인쇄양식)</label>
+            <input type="text" id="editEduCompany" style="height: 36px; box-sizing: border-box;" placeholder="선진물류㈜" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium text-xs block">
+          </div>
+          <div class="min-w-0">
+            <label class="font-bold text-slate-600 block mb-0.5 text-[11px]">현장대리인 (인쇄양식)</label>
+            <input type="text" id="editEduManager" style="height: 36px; box-sizing: border-box;" placeholder="심교인 상무" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium text-xs block">
+          </div>
         </div>
       </div>
 
@@ -824,14 +844,17 @@
           <p class="text-[10px] text-slate-400" id="printModalPageDesc">설치기사는 넉넉한 서명 공간 확보를 위해 총 2장으로 분할 인쇄됩니다.</p>
         </div>
       </div>
-      <div class="flex items-center gap-1.5 flex-wrap">
-        <button type="button" onclick="downloadPdfDirectly()" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-xs flex items-center gap-1.5 transition-all active:scale-95" title="모바일 기기 내부 저장소에 PDF 파일 바로 다운로드">
-          <i class="fa-solid fa-file-arrow-down text-xs"></i> <span>PDF 스마트폰 저장</span>
+      <div class="flex items-center gap-1.5 flex-wrap justify-end">
+        <button type="button" onclick="openEduInfoModal()" class="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-black text-xs shadow-xs flex items-center gap-1 transition-all active:scale-95" title="교육 제목, 일자, 시간, 강사, 장소 수정">
+          <i class="fa-solid fa-pen-to-square text-xs"></i> <span>내용 수정</span>
         </button>
-        <button type="button" onclick="executeNativePrint()" class="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-xs flex items-center gap-1.5 transition-all active:scale-95" title="모바일 프린터 또는 AirPrint 인쇄">
+        <button type="button" onclick="downloadPdfDirectly()" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-xs flex items-center gap-1 transition-all active:scale-95" title="모바일 기기 내부 저장소에 PDF 파일 바로 다운로드">
+          <i class="fa-solid fa-file-arrow-down text-xs"></i> <span>PDF 저장</span>
+        </button>
+        <button type="button" onclick="executeNativePrint()" class="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-xs flex items-center gap-1 transition-all active:scale-95" title="모바일 프린터 또는 AirPrint 인쇄">
           <i class="fa-solid fa-print text-xs"></i> <span>프린터 인쇄</span>
         </button>
-        <button type="button" onclick="closePrintPreviewModal()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-all">
+        <button type="button" onclick="closePrintPreviewModal()" class="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-all">
           ✕ 닫기
         </button>
       </div>
@@ -950,15 +973,21 @@
           id: 'sess-1',
           title: '1차: 정기 안전보건교육',
           date: getTodayDateStr(),
+          time: '08:30 ~ 09:30',
           place: '원주TC / 2층교육장',
-          instructor: '안전관리팀'
+          instructor: '안전관리팀',
+          company: '선진물류㈜',
+          manager: '심교인 상무'
         },
         {
           id: 'sess-2',
           title: '2차: 서비스 품질교육',
           date: getTodayDateStr(),
+          time: '13:00 ~ 14:00',
           place: '원주TC / 2층교육장',
-          instructor: 'CS품질혁신팀'
+          instructor: 'CS품질혁신팀',
+          company: '선진물류㈜',
+          manager: '심교인 상무'
         }
       ],
       groups: {
@@ -2715,6 +2744,8 @@
       const nextNum = (appData.sessions ? appData.sessions.length : 1) + 1;
       document.getElementById('newSessionTitle').value = `${nextNum}차`;
       document.getElementById('newSessionDate').value = getTodayDateStr();
+      const tInp = document.getElementById('newSessionTime');
+      if (tInp) tInp.value = '13:00 ~ 14:00';
       document.getElementById('newSessionPlace').value = '원주TC / 2층교육장';
       document.getElementById('newSessionInstructor').value = '안전관리팀';
       document.getElementById('addSessionModal').classList.remove('hidden');
@@ -2727,6 +2758,8 @@
     function saveNewSession() {
       const title = document.getElementById('newSessionTitle').value.trim() || '새 교육 회차';
       const date = document.getElementById('newSessionDate').value || getTodayDateStr();
+      const tInp = document.getElementById('newSessionTime');
+      const time = (tInp && tInp.value.trim()) ? tInp.value.trim() : '13:00 ~ 14:00';
       const place = document.getElementById('newSessionPlace').value.trim() || '원주TC / 2층교육장';
       const instructor = document.getElementById('newSessionInstructor').value.trim() || '안전관리팀';
 
@@ -2736,8 +2769,11 @@
         id: newId,
         title: title,
         date: date,
+        time: time,
         place: place,
-        instructor: instructor
+        instructor: instructor,
+        company: '선진물류㈜',
+        manager: '심교인 상무'
       };
 
       appData.sessions.push(newSession);
@@ -4739,8 +4775,14 @@
       const sess = getActiveSession();
       document.getElementById('editEduTitle').value = sess.title;
       document.getElementById('editEduDate').value = (!sess.date || sess.date === '2026-11-11') ? getTodayDateStr() : sess.date;
+      const timeInp = document.getElementById('editEduTime');
+      if (timeInp) timeInp.value = sess.time || '13:00 ~ 14:00';
       document.getElementById('editEduPlace').value = sess.place;
       document.getElementById('editEduInstructor').value = sess.instructor;
+      const compInp = document.getElementById('editEduCompany');
+      if (compInp) compInp.value = sess.company || '선진물류㈜';
+      const mgrInp = document.getElementById('editEduManager');
+      if (mgrInp) mgrInp.value = sess.manager || '심교인 상무';
       document.getElementById('eduInfoModal').classList.remove('hidden');
     }
 
@@ -4754,8 +4796,14 @@
       const nextTitle = document.getElementById('editEduTitle').value.trim() || '교육 회차';
       sess.title = nextTitle;
       sess.date = document.getElementById('editEduDate').value || getTodayDateStr();
+      const timeInp = document.getElementById('editEduTime');
+      if (timeInp) sess.time = timeInp.value.trim() || '13:00 ~ 14:00';
       sess.place = document.getElementById('editEduPlace').value.trim() || '원주TC / 2층교육장';
       sess.instructor = document.getElementById('editEduInstructor').value.trim() || '안전관리팀';
+      const compInp = document.getElementById('editEduCompany');
+      if (compInp) sess.company = compInp.value.trim() || '선진물류㈜';
+      const mgrInp = document.getElementById('editEduManager');
+      if (mgrInp) sess.manager = mgrInp.value.trim() || '심교인 상무';
 
       // 교육 과정명이 새로 변경되었는데 현재 회차에 서명자가 0명이라면, 이전 동일 회차 ID(sess-1 등)의 잔여 서명이 섞이지 않도록 기준 시각 초기화
       if (prevTitle !== nextTitle) {
@@ -4785,6 +4833,10 @@
       closeEduInfoModal();
       renderAll();
       renderQrContent();
+      const previewModal = document.getElementById('printPreviewModal');
+      if (previewModal && !previewModal.classList.contains('hidden')) {
+        openPrintPreviewModal();
+      }
       showToast(`[${sess.title}] 정보가 수정되었습니다.`);
     }
 
@@ -4840,152 +4892,223 @@
       }
     }
 
-    // ==================== A4 PRINT ENGINE ====================
+    // ==================== A4 PRINT ENGINE (화일철 보관용 공식 양식 · 화면 잘림 방지 & 1장 자동 맞춤) ====================
     function triggerPrintA4() {
       openPrintPreviewModal();
+    }
+
+    function formatKoreanMonthDay(dateStr) {
+      if (!dateStr) return '';
+      const m = String(dateStr).match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (m) {
+        return `${parseInt(m[2], 10)}월 ${parseInt(m[3], 10)}일`;
+      }
+      return dateStr;
     }
 
     function openPrintPreviewModal() {
       const activeSess = getActiveSession();
       const g = appData.groups[activeTargetGroup];
-      const roster = g.roster;
-      const unit = g.unit;
-      const term = g.workTerm;
+      const roster = g.roster || [];
       const isDriver = g.key === 'driver';
 
       const container = document.getElementById('printPagesContainer');
       const titleDesc = document.getElementById('printModalPageDesc');
       if (!container) return;
 
-      const total = roster.length;
-      const signed = roster.filter(r => {
+      const totalCount = roster.length;
+      const workCount = roster.filter(r => r.status === 'work').length;
+      const offCount = roster.filter(r => r.status === 'off').length;
+      const signedCount = roster.filter(r => {
         if (r.status !== 'work') return false;
         if (r.signatures && r.signatures[activeSess.id] && r.signatures[activeSess.id].signed) return true;
-        
         return false;
       }).length;
-      const off = roster.filter(r => r.status === 'off').length;
+      const unsignedCount = Math.max(0, workCount - signedCount);
 
-      const itemsPerPage = isDriver ? 32 : 35;
-      const totalPages = Math.ceil(roster.length / itemsPerPage) || 1;
+      // 화일철 보관용 2단(좌 1~15 / 우 16~30) 기본 30명 1장 양식 (설치기사 64명일 때는 좌 16 / 우 16 = 32명씩 2장)
+      const rowsPerCol = isDriver ? 16 : 15;
+      const itemsPerPage = rowsPerCol * 2;
+      const totalPages = Math.max(1, Math.ceil(roster.length / itemsPerPage));
 
       if (titleDesc) {
-        titleDesc.textContent = isDriver 
-          ? `설치기사는 총 ${totalPages}장으로 분할 인쇄됩니다.`
-          : `${g.name}는 총 ${totalPages}장으로 인쇄됩니다.`;
+        titleDesc.textContent = `A4 1장 자동 맞춤 (화일철 상·하·좌·우 여백 적용) · 총 ${totalPages}장`;
+      }
+
+      const rawTitle = String(activeSess.title || '안전보건교육').trim();
+      let cleanCourseName = rawTitle;
+      const colonMatch = rawTitle.match(/^([^:：]+)[:：]\s*(.+)$/);
+      if (colonMatch) {
+        cleanCourseName = colonMatch[2].trim();
+      }
+
+      const dateDisplay = formatKoreanMonthDay(activeSess.date || getTodayDateStr());
+      const timeDisplay = activeSess.time || '13:00 ~ 14:00';
+      const companyDisplay = activeSess.company || '선진물류㈜';
+      const managerDisplay = activeSess.manager || '심교인 상무';
+      const instructorDisplay = activeSess.instructor || '최동길 책임';
+      const placeDisplay = activeSess.place || '원주TC / 2층교육장';
+      const targetLabel = g.name || '보관하역(주간)';
+      const remarkText = offCount > 0 ? `당일 휴무 ${offCount}명` : '';
+
+      function getDeptShortLabel(item) {
+        if (!item) return '';
+        if (g.key === 'driver') return item.cell || '설치기사';
+        if (g.key === 'staff') return (item.cell === '임원진') ? '임원진' : '운영스탭';
+        if (g.key === 'warehouse_day' || g.key === 'warehouse_night') return '보관하역';
+        return item.cell || '';
+      }
+
+      function renderHalfCellSet(item, slotNo) {
+        if (!item) {
+          return `
+            <td style="border: 1px solid #000; text-align: center; font-weight: 800; font-size: 11px; color: #000; padding: 0;">${slotNo}</td>
+            <td style="border: 1px solid #000; text-align: center; font-size: 10px; padding: 0 2px;"></td>
+            <td style="border: 1px solid #000; text-align: center; font-size: 10.5px; padding: 0 2px;"></td>
+            <td style="border: 1px solid #000; text-align: center; padding: 0 2px;"></td>
+          `;
+        }
+        const isWork = item.status === 'work';
+        const sessSign = (item.signatures && item.signatures[activeSess.id]) || { signed: false, sigData: null };
+        let sigHtml = '';
+        if (!isWork) {
+          sigHtml = `<span style="color: #64748b; font-weight: 700; font-size: 9.5px; line-height: 1;">휴무</span>`;
+        } else if (sessSign && sessSign.signed && sessSign.sigData) {
+          sigHtml = `<div style="width: 100%; height: 18px; display: flex; align-items: center; justify-content: center; overflow: hidden;"><img src="${sessSign.sigData}" style="max-width: 92%; max-height: 16px; width: auto; height: auto; display: block; margin: 0 auto; object-fit: contain; mix-blend-mode: multiply;"></div>`;
+        } else {
+          sigHtml = '';
+        }
+        const deptStr = getDeptShortLabel(item);
+        return `
+          <td style="border: 1px solid #000; text-align: center; vertical-align: middle; font-weight: 800; font-size: 11px; color: #000; padding: 0;">${slotNo}</td>
+          <td style="border: 1px solid #000; text-align: center; vertical-align: middle; font-size: ${isDriver ? '9.5px' : '10px'}; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px;">${deptStr}</td>
+          <td style="border: 1px solid #000; text-align: center; vertical-align: middle; font-size: 10.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px;">${item.driverName || ''}</td>
+          <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 1px 2px; overflow: hidden;">${sigHtml}</td>
+        `;
       }
 
       function buildPageHtml(pageItems, pageNum, totalPages) {
-        const rawTitle = String(activeSess.title || '교육').trim();
-        let roundLabel = '당일 정규';
-        let cleanCourseName = rawTitle;
-        const colonMatch = rawTitle.match(/^([^:：]+)[:：]\s*(.+)$/);
-        if (colonMatch) {
-          roundLabel = colonMatch[1].trim();
-          cleanCourseName = colonMatch[2].trim();
+        const baseNo = (pageNum - 1) * itemsPerPage;
+        const rowHeightPx = isDriver ? 23 : 24;
+        let attendeeRowsHtml = '';
+
+        for (let r = 0; r < rowsPerCol; r++) {
+          const leftNo = baseNo + r + 1;
+          const rightNo = baseNo + rowsPerCol + r + 1;
+          const leftItem = pageItems[r] || null;
+          const rightItem = pageItems[rowsPerCol + r] || null;
+
+          attendeeRowsHtml += `
+            <tr style="height: ${rowHeightPx}px;">
+              ${renderHalfCellSet(leftItem, leftNo)}
+              ${renderHalfCellSet(rightItem, rightNo)}
+            </tr>
+          `;
         }
-        const isSafetyEdu = /안전|보건/.test(rawTitle);
-        const footerNote = isSafetyEdu
-          ? '※ 본 확인서는 산업안전보건법 제29조에 의거하여 실시된 안전보건교육 이수 확인 증빙 서류입니다.'
-          : `※ 본 확인서는 원주TC에서 실시된 [${cleanCourseName}] 참석 및 이수 확인 증빙 서류입니다.`;
-        let rows = '';
-        pageItems.forEach((item, i) => {
-          const globalIdx = (pageNum - 1) * itemsPerPage + i;
-          const isWork = item.status === 'work';
-          const sessSign = (item.signatures && item.signatures[activeSess.id]) || { signed: false, sigData: null };
-          
-          let sigCell = '';
-          if (!isWork) {
-            sigCell = `<span style="color: #64748b; font-weight: bold; font-size: 8.5px;">휴무</span>`;
-          } else if (sessSign && sessSign.signed && sessSign.sigData) {
-            sigCell = `<img src="${sessSign.sigData}" style="max-height: 18px; max-width: 70px; margin: 0 auto; object-fit: contain;">`;
-          } else {
-            sigCell = `<span style="color: #cbd5e1; font-size: 8.5px;">미서명</span>`;
-          }
 
-          if (isDriver) {
-            rows += `
-              <tr style="border-bottom: 1px solid #000; height: 20px;">
-                <td style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 8.5px; font-family: monospace; width: 6%;">${globalIdx + 1}</td>
-                <td style="border: 1px solid #000; padding: 1px 4px; font-size: 8.5px; text-align: center; white-space: nowrap; width: 18%;">${item.cell}</td>
-                <td style="border: 1px solid #000; padding: 1px 4px; font-size: 9px; font-family: monospace; font-weight: 600; text-align: center; white-space: nowrap; width: 23%;">${item.carNo}</td>
-                <td style="border: 1px solid #000; padding: 1px 4px; font-size: 9.5px; font-weight: 800; text-align: center; white-space: nowrap; width: 17%;">${item.driverName}</td>
-                <td style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 9px; font-weight: bold; white-space: nowrap; width: 12%;">${isWork ? '<span style="color:#000;">가동</span>' : '<span style="color:#ef4444;">휴무</span>'}</td>
-                <td style="border: 1px solid #000; padding: 1px 4px; text-align: center; height: 20px; width: 24%;">${sigCell}</td>
-              </tr>
-            `;
-          } else {
-            // 운영스탭 & 보관하역(주간/야간) 공통: 직책 열 없이 깔끔하게 No | 소속 | 성명 | 상태 | 서명 5열 구성
-            const deptLabel = g.key === 'staff'
-              ? ((item.cell === '임원진') ? '임원진' : '스탭')
-              : (g.key === 'warehouse_day' ? '보관(주간)' : '보관(야간)');
-            rows += `
-              <tr style="border-bottom: 1px solid #000; height: 21px;">
-                <td style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 9px; font-family: monospace; width: 8%;">${globalIdx + 1}</td>
-                <td style="border: 1px solid #000; padding: 1px 4px; font-size: 9px; text-align: center; white-space: nowrap; width: 24%;">${deptLabel}</td>
-                <td style="border: 1px solid #000; padding: 1px 4px; font-size: 10px; font-weight: 800; text-align: center; white-space: nowrap; width: 28%;">${item.driverName}</td>
-                <td style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 9px; font-weight: bold; white-space: nowrap; width: 14%;">${isWork ? '<span style="color:#000;">근무</span>' : '<span style="color:#ef4444;">휴무</span>'}</td>
-                <td style="border: 1px solid #000; padding: 1px 4px; text-align: center; height: 21px; width: 26%;">${sigCell}</td>
-              </tr>
-            `;
-          }
-        });
-
-        const tableHeaders = isDriver ? `
-          <tr style="background-color: #f1f5f9; border-bottom: 1.5px solid #000; height: 20px;">
-            <th style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 8.5px; width: 6%;">No</th>
-            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 8.5px; white-space: nowrap; width: 18%;">소속</th>
-            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 8.5px; white-space: nowrap; width: 23%;">차량번호</th>
-            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 8.5px; white-space: nowrap; width: 17%;">성명</th>
-            <th style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 8.5px; white-space: nowrap; width: 12%;">상태</th>
-            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 8.5px; white-space: nowrap; width: 24%;">서명</th>
-          </tr>
-        ` : `
-          <tr style="background-color: #f1f5f9; border-bottom: 1.5px solid #000; height: 20px;">
-            <th style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 9px; width: 8%;">No</th>
-            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 9px; white-space: nowrap; width: 24%;">소속</th>
-            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 9px; white-space: nowrap; width: 28%;">성명</th>
-            <th style="border: 1px solid #000; padding: 1px 2px; text-align: center; font-size: 9px; white-space: nowrap; width: 14%;">상태</th>
-            <th style="border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 9px; white-space: nowrap; width: 26%;">서명</th>
-          </tr>
-        `;
+        const pageSuffix = totalPages > 1 ? ` <span style="font-size: 13px; font-weight: 700;">(${pageNum}/${totalPages})</span>` : '';
 
         return `
-          <div class="print-page-sheet bg-white text-black rounded-lg shadow-xl p-2.5 sm:p-4 w-full max-w-[210mm] border border-slate-300 font-sans" style="min-height: 268mm; max-height: 272mm; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;">
-            <div>
-              <div class="text-center border-b-2 border-black pb-1.5 mb-2">
-                <div class="flex items-center justify-between text-[8px] text-gray-500 mb-0.5 font-bold">
-                  <span>원주TC 교육 이수 증빙 서식 (${roundLabel})</span>
-                  <span>[ ${pageNum} / ${totalPages} 페이지 ]</span>
-                </div>
-                <h1 class="font-black tracking-tight text-black" style="font-size: 14pt; line-height: 1.2; white-space: nowrap; margin-bottom: 2px;">
-                  ${cleanCourseName} 참석 및 서명 확인서
-                </h1>
-                <div class="flex items-center justify-between text-[8.5px] sm:text-[9.5px] font-semibold text-slate-800 border-t border-slate-300 pt-1 mt-1 tracking-tight">
-                  <span><strong>교육일시:</strong> ${activeSess.date} (${roundLabel})</span>
-                  <span><strong>교육장소:</strong> ${activeSess.place}</span>
-                  <span><strong>교육강사:</strong> ${activeSess.instructor}</span>
-                </div>
-              </div>
+          <div class="print-page-sheet bg-white text-black rounded-lg shadow-xl w-full border border-slate-300" style="width: 100%; max-width: 720px; padding: 16px 12px; margin: 0 auto; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-start; overflow: hidden; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Pretendard', sans-serif; color: #000;">
+            <!-- 상단 타이틀 -->
+            <div style="text-align: center; margin-bottom: 10px;">
+              <h1 style="display: inline-block; font-size: 20px; font-weight: 900; color: #000; letter-spacing: 0.5px; border-bottom: 2px solid #000; padding-bottom: 2px; line-height: 1.25; margin: 0;">
+                ${cleanCourseName}${pageSuffix}
+              </h1>
+            </div>
 
-              <div class="mb-1.5 flex items-center justify-between text-[8px] sm:text-[9px] font-bold px-0.5 text-slate-800 tracking-tight" style="letter-spacing: -0.3px;">
-                <span>직군: ${getRosterJobTitle(roster)} &nbsp;|&nbsp; 총원: ${total}${unit} &nbsp;|&nbsp; 서명완료: ${signed}${unit} &nbsp;|&nbsp; 당일휴무: ${off}${unit}</span>
-                <span>주관: 원주TC</span>
-              </div>
-
-              <table class="print-table" style="width: 100%; table-layout: fixed; border-collapse: collapse; border: 1.5px solid #000;">
-                <thead>
-                  ${tableHeaders}
-                </thead>
+            <!-- 1. 개요 -->
+            <div style="margin-bottom: 10px;">
+              <div style="font-size: 13px; font-weight: 800; margin-bottom: 4px; color: #000;">1. 개요</div>
+              <table style="width: 100%; table-layout: fixed; border-collapse: collapse; border: 1.5px solid #000; font-size: 11px; color: #000;">
+                <colgroup>
+                  <col style="width: 15%;">
+                  <col style="width: 18%;">
+                  <col style="width: 12%;">
+                  <col style="width: 12%;">
+                  <col style="width: 12%;">
+                  <col style="width: 31%;">
+                </colgroup>
                 <tbody>
-                  ${rows}
+                  <tr style="height: 23px;">
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">센터</td>
+                    <td colspan="2" style="border: 1px solid #000; text-align: center; font-weight: 700;">원주TC</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">일자</td>
+                    <td colspan="2" style="border: 1px solid #000; text-align: center; font-weight: 600;">${dateDisplay}</td>
+                  </tr>
+                  <tr style="height: 23px;">
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">회사</td>
+                    <td colspan="2" style="border: 1px solid #000; text-align: center; font-weight: 700;">${companyDisplay}</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">시간</td>
+                    <td colspan="2" style="border: 1px solid #000; text-align: center; font-weight: 600;">${timeDisplay}</td>
+                  </tr>
+                  <tr style="height: 23px;">
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">현장대리인</td>
+                    <td colspan="2" style="border: 1px solid #000; text-align: center; font-weight: 700;">${managerDisplay}</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">강사</td>
+                    <td colspan="2" style="border: 1px solid #000; text-align: center; font-weight: 700;">${instructorDisplay}</td>
+                  </tr>
+                  <tr style="height: 23px;">
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">대상</td>
+                    <td colspan="2" style="border: 1px solid #000; text-align: left; padding-left: 8px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">■ ${targetLabel}</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">장소</td>
+                    <td colspan="2" style="border: 1px solid #000; text-align: center; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${placeDisplay}</td>
+                  </tr>
+                  <tr style="height: 22px;">
+                    <td rowspan="3" style="border: 1px solid #000; text-align: center; font-weight: 700; line-height: 1.25; background-color: #f8fafc;">이수현황<br>상세</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">구분</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">대상</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">이수</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">미이수</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">비고</td>
+                  </tr>
+                  <tr style="height: 22px;">
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 600; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${targetLabel}</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700;">${workCount > 0 ? workCount + '명' : ''}</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700;">${signedCount > 0 ? signedCount + '명' : (workCount > 0 ? '0명' : '')}</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700;">${workCount > 0 ? unsignedCount + '명' : ''}</td>
+                    <td rowspan="2" style="border: 1px solid #000; text-align: center; font-size: 10px; color: #334155; padding: 1px 3px;">${remarkText}</td>
+                  </tr>
+                  <tr style="height: 22px;">
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 700; background-color: #f8fafc;">합계</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 800;">${workCount > 0 ? workCount + '명' : ''}</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 800;">${signedCount > 0 ? signedCount + '명' : (workCount > 0 ? '0명' : '')}</td>
+                    <td style="border: 1px solid #000; text-align: center; font-weight: 800;">${workCount > 0 ? unsignedCount + '명' : ''}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
 
-            <div class="mt-2 pt-1 border-t border-gray-400 text-[8px] text-gray-600 flex justify-between items-center">
-              <span>${footerNote}</span>
-              <span>출력일시: ${getTodayDateStr()} · 원주TC</span>
+            <!-- 2. 교육 참석자 (좌/우 2단 테이블) -->
+            <div>
+              <div style="font-size: 13px; font-weight: 800; margin-bottom: 4px; color: #000;">2. 교육 참석자</div>
+              <table style="width: 100%; table-layout: fixed; border-collapse: collapse; border: 1.5px solid #000; color: #000;">
+                <colgroup>
+                  <col style="width: 6.5%;">
+                  <col style="width: 14.5%;">
+                  <col style="width: 14%;">
+                  <col style="width: 15%;">
+                  <col style="width: 6.5%;">
+                  <col style="width: 14.5%;">
+                  <col style="width: 14%;">
+                  <col style="width: 15%;">
+                </colgroup>
+                <thead>
+                  <tr style="height: 24px; background-color: #f8fafc; border-bottom: 1.2px solid #000;">
+                    <th style="border: 1px solid #000; text-align: center; font-size: 11px; font-weight: 800;">NO.</th>
+                    <th style="border: 1px solid #000; text-align: center; font-size: 11px; font-weight: 800;">소속</th>
+                    <th style="border: 1px solid #000; text-align: center; font-size: 11px; font-weight: 800;">이름</th>
+                    <th style="border: 1px solid #000; text-align: center; font-size: 11px; font-weight: 800;">서명</th>
+                    <th style="border: 1px solid #000; text-align: center; font-size: 11px; font-weight: 800;">NO.</th>
+                    <th style="border: 1px solid #000; text-align: center; font-size: 11px; font-weight: 800;">소속</th>
+                    <th style="border: 1px solid #000; text-align: center; font-size: 11px; font-weight: 800;">이름</th>
+                    <th style="border: 1px solid #000; text-align: center; font-size: 11px; font-weight: 800;">서명</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${attendeeRowsHtml}
+                </tbody>
+              </table>
             </div>
           </div>
         `;
@@ -5011,7 +5134,7 @@
       const sheets = Array.from(container.querySelectorAll('.print-page-sheet'));
       if (sheets.length === 0) return;
 
-      showToast('📄 맞춤 PDF를 생성하고 있습니다...');
+      showToast('📄 화일철 보관용 맞춤 PDF를 생성하고 있습니다...');
 
       if (typeof html2pdf !== 'undefined') {
         try {
@@ -5020,7 +5143,7 @@
           const filename = `${cleanTitle}_서명부_원주TC.pdf`;
 
           const opt = {
-            margin: 0,
+            margin: [18, 14, 16, 14],
             filename: filename,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true, logging: false, scrollY: 0 },
@@ -5036,7 +5159,7 @@
           }
 
           await worker.save();
-          showToast(`✅ 총 ${sheets.length}장 맞춤 PDF 저장이 완료되었습니다!`);
+          showToast(`✅ 총 ${sheets.length}장 화일철 양식 PDF 저장이 완료되었습니다!`);
         } catch (err) {
           console.warn('Per-sheet PDF error, falling back:', err);
           openStandalonePrintTab();
@@ -5063,31 +5186,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${activeSess.title} 참석 및 서명 확인서</title>
+  <title>${activeSess.title}</title>
   <style>
-    @page { size: A4 portrait; margin: 6mm 8mm 6mm 8mm; }
+    @page { size: A4 portrait; margin: 20mm 15mm 18mm 15mm; }
     html, body {
+      width: 100% !important;
       background: white !important;
       margin: 0 !important;
       padding: 0 !important;
       color: black !important;
-      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif;
+      font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Pretendard', sans-serif;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
     .print-page-sheet {
       page-break-after: always !important;
       break-after: page !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
       width: 100% !important;
       max-width: 100% !important;
-      height: 272mm !important;
-      max-height: 272mm !important;
-      padding: 0 !important;
+      height: auto !important;
+      max-height: 256mm !important;
+      padding: 2mm 1mm !important;
       margin: 0 auto !important;
       box-sizing: border-box !important;
       display: flex !important;
       flex-direction: column !important;
-      justify-content: space-between !important;
+      justify-content: flex-start !important;
       overflow: hidden !important;
       border: none !important;
       box-shadow: none !important;
@@ -5111,16 +5237,15 @@
 </body>
 </html>`);
         printWin.document.close();
-        showToast('🖨️ 인쇄 / PDF 저장 창을 열었습니다.');
+        showToast('🖨️ 화일철 양식 1장 맞춤 인쇄 창을 열었습니다.');
       } else {
         try {
           window.print();
         } catch (e) {
-          showToast('상단의 [PDF 스마트폰 저장]을 눌러주세요.');
+          showToast('상단의 [PDF 저장]을 눌러주세요.');
         }
       }
     }
-
 
     // ==================== 연결 진단 ====================
     async function runSyncDiagnostics() {
