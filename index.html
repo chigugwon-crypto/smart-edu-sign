@@ -7,8 +7,8 @@
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+  <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js" defer></script>
 
 
   <style>
@@ -83,7 +83,14 @@
   <!-- ==================== TOP NAVIGATION BAR ==================== -->
   <nav class="bg-slate-900 text-white py-2 px-3 shadow-md no-print sticky top-0 z-40">
     <div class="max-w-md mx-auto flex items-center justify-between gap-2" id="topNavContent">
-      <!-- Injected dynamically via updateTopNav() -->
+      <button type="button" onclick="switchAppMode('admin')" class="py-1.5 px-3 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs">
+        <i class="fa-solid fa-user-gear text-xs"></i>
+        <span>관리자 모드 실행 중</span>
+      </button>
+      <button type="button" onclick="switchAppMode('worker')" class="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center gap-1.5 shadow-xs transition-all">
+        <i class="fa-solid fa-truck text-xs"></i>
+        <span>현장 서명용 화면 전환</span>
+      </button>
     </div>
   </nav>
 
@@ -565,8 +572,8 @@
   </div>
 
   <!-- 3. Dual QR Modal (Worker vs Admin) -->
-  <div id="qrModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden no-print">
-    <div class="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-200 flex flex-col" style="max-height:92vh;max-height:92dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+  <div id="qrModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 pb-14 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-200 flex flex-col overflow-hidden" style="max-height:82vh;max-height:82dvh;">
       <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
         <div class="flex items-center gap-2">
           <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-xs">
@@ -582,7 +589,7 @@
         </button>
       </div>
 
-      <div class="p-4 space-y-3 text-center">
+      <div class="p-4 pb-12 space-y-3 text-center overflow-y-auto flex-1" style="-webkit-overflow-scrolling:touch;">
         <div class="flex rounded-xl bg-slate-100 p-1 border border-slate-200">
           <button type="button" onclick="switchQrTab('worker')" id="qrTab_worker" class="flex-1 py-1.5 rounded-lg text-xs font-black bg-white text-slate-900 shadow-xs flex items-center justify-center gap-1.5">
             <i class="fa-solid fa-truck text-emerald-600"></i> 현장 서명용 QR
@@ -651,25 +658,27 @@
             <span>🌐 배포 도메인 및 서버 DB 설정</span>
             <span class="text-[10px] text-blue-600 font-normal">설정/확인</span>
           </summary>
-          <div class="mt-2 space-y-2">
-            <div>
-              <p class="text-[10px] text-slate-500 mb-1">1. 배포된 Netlify 주소 (QR코드 기본 연결 주소):</p>
+          <div class="mt-2 space-y-2.5">
+            <div class="bg-amber-50/70 border border-amber-200 rounded-lg p-2">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-[10px] font-bold text-amber-900">1. 실시간 연결 상태 진단</p>
+                <button type="button" onclick="runSyncDiagnostics()" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-black text-[11px] rounded-lg shadow-2xs shrink-0">연결 진단 실행</button>
+              </div>
+              <pre id="syncDiagResult" class="mt-1.5 text-[10px] font-mono bg-white border border-amber-200 rounded-lg p-2 whitespace-pre-wrap hidden"></pre>
+            </div>
+            <div class="pt-1.5 border-t border-slate-200">
+              <p class="text-[10px] text-slate-500 mb-1">2. 배포된 Netlify 주소 (QR코드 기본 연결 주소):</p>
               <div class="flex gap-1">
                 <input type="text" id="customDomainInput" placeholder="https://coruscating-kulfi-9524ef.netlify.app" class="flex-1 text-xs font-mono bg-white border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500">
                 <button type="button" onclick="saveCustomDomain()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg shrink-0">저장</button>
               </div>
             </div>
             <div class="pt-1.5 border-t border-slate-200">
-              <p class="text-[10px] text-slate-500 mb-1">2. (선택) Firebase 실시간 DB 주소 (미입력 시 기본 실시간 브로커 자동 작동):</p>
+              <p class="text-[10px] text-emerald-700 font-bold mb-1">3. ✅ Firebase 실시간 DB 원클릭 자동 연동됨 (TBM 일지 방식):</p>
               <div class="flex gap-1">
-                <input type="text" id="customFirebaseInput" placeholder="https://본인프로젝트.firebaseio.com" class="flex-1 text-xs font-mono bg-white border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500">
-                <button type="button" onclick="saveCustomFirebaseUrl()" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shrink-0">연결</button>
+                <input type="text" id="customFirebaseInput" value="https://smart-eud-sign-default-rtdb.firebaseio.com" placeholder="https://smart-eud-sign-default-rtdb.firebaseio.com" class="flex-1 text-xs font-mono bg-white border border-emerald-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                <button type="button" onclick="saveCustomFirebaseUrl()" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shrink-0">연결됨</button>
               </div>
-            </div>
-            <div class="pt-1.5 border-t border-slate-200">
-              <p class="text-[10px] text-slate-500 mb-1">3. 연결 진단 (이 기기에서 어떤 실시간 통로가 막혔는지 확인):</p>
-              <button type="button" onclick="runSyncDiagnostics()" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-lg">연결 진단 실행</button>
-              <pre id="syncDiagResult" class="mt-1.5 text-[10px] font-mono bg-white border border-slate-200 rounded-lg p-2 whitespace-pre-wrap hidden"></pre>
             </div>
           </div>
         </details>
@@ -839,6 +848,7 @@
     const STORAGE_KEY = 'edu_sign_app_state_v60';
 
     const DEFAULT_NETLIFY_URL = "https://coruscating-kulfi-9524ef.netlify.app";
+    const DEFAULT_FIREBASE_DB_URL = "https://smart-eud-sign-default-rtdb.firebaseio.com";
 
     const REAL_STAFF_MEMBERS = [
       { name: '곽준호', role: '대표이사' },
@@ -929,6 +939,7 @@
     }
 
     const defaultData = {
+      firebaseDbUrl: DEFAULT_FIREBASE_DB_URL,
       adminPin: '0000',
       authCode: generateRandomPin4(),
       eduEpoch: generateEduEpoch(),
@@ -1039,6 +1050,7 @@
               if (!s.date || s.date === '2026-11-11') s.date = todayStr;
             });
           }
+          if (!parsed.firebaseDbUrl) parsed.firebaseDbUrl = DEFAULT_FIREBASE_DB_URL;
           appData = parsed;
         }
       }
@@ -1077,6 +1089,7 @@
     let epochRejectCount = 0;
     const fbSigSeen = {};
     let lastFbStateTs = 0;
+    let lastFbStateHash = '';
     function fetchWithTimeout(url, options, ms) {
       const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       const timer = ctrl ? setTimeout(() => ctrl.abort(), ms || 6000) : null;
@@ -1317,8 +1330,8 @@
       let anyApplied = false;
       Object.values(pendingRemoteSigPackets).forEach(pkt => {
         if (!pkt || !pkt.groupKey || !pkt.personKey) return;
-        if (appData.eduEpoch && pkt.eduEpoch && pkt.eduEpoch !== appData.eduEpoch) return;
-        if (appData.eduEpoch && !pkt.eduEpoch) return;
+        const isRecentLiveSig = pkt.ts && (pkt.ts >= (PAGE_OPEN_TS - 60000));
+        if (appData.eduEpoch && pkt.eduEpoch !== appData.eduEpoch && !isRecentLiveSig) return;
         if (pkt.ts && appData.lastResetTs && pkt.ts < appData.lastResetTs) return;
 
         const g = appData.groups[pkt.groupKey];
@@ -1678,8 +1691,12 @@
     // 원격에서 개별 참석자 서명 패킷 수신 시 즉시 반영!
     function applyRemoteSignaturePacket(pkt) {
       if (!pkt || !pkt.groupKey || !pkt.personKey) return;
-      // [핵심 격리] 현재 교육 회차 고유 ID(eduEpoch)가 다르면 이전 교육의 잔여 서명(설치기사/스탭/보관주간/야간 모두)을 100% 차단!
-      if (appData.eduEpoch && pkt.eduEpoch !== appData.eduEpoch) { epochRejectCount++; return; }
+      // [핵심 격리] 이전 교육의 오래된 잔여 서명은 차단하되, 현재 창을 연 이후(PAGE_OPEN_TS) 실시간으로 방금 제출된 서명은 ep 차이와 무관하게 100% 즉시 반영!
+      const isRecentLiveSig = pkt.ts && (pkt.ts >= (PAGE_OPEN_TS - 60000));
+      if (appData.eduEpoch && pkt.eduEpoch !== appData.eduEpoch && !isRecentLiveSig) {
+        epochRejectCount++;
+        return;
+      }
       if (pkt.ts && appData.lastResetTs && pkt.ts < appData.lastResetTs) return;
 
       const targetSessId = pkt.sessionId || getActiveSession().id;
@@ -1758,9 +1775,8 @@
     let pushStateTimer = null;
     function pushCloudState() {
       if (currentMode !== 'admin') return;
-      // 짧은 시간에 여러 번 호출돼도 1번만 전송 (ntfy 무료 전송 한도 소진 방지)
       clearTimeout(pushStateTimer);
-      pushStateTimer = setTimeout(doPushCloudState, 500);
+      pushStateTimer = setTimeout(doPushCloudState, 120);
     }
 
     function doPushCloudState() {
@@ -1802,7 +1818,11 @@
           body: jsonStr
         }, 8000).then(res => {
           relayStatus.firebase = res.ok ? 'ok' : ('HTTP ' + res.status);
-        }).catch(() => { relayStatus.firebase = 'fail'; });
+          if (res.ok) checkAndUpdateBrokerBadge();
+        }).catch(() => {
+          relayStatus.firebase = 'fail';
+          checkAndUpdateBrokerBadge();
+        });
       }
     }
 
@@ -1865,11 +1885,25 @@
 
       const fbUrl = getActiveFirebaseUrl();
       if (fbUrl) {
-        fetchWithTimeout(`${fbUrl}/eduSigs/${sessionId}/${groupKey}/${safeKey}.json`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: jsonStr
-        }, 8000).catch(() => {});
+        const sendFbSig = (retryLeft) => {
+          const reqMethod = (action === 'delete') ? 'DELETE' : 'PUT';
+          const reqOpts = (action === 'delete')
+            ? { method: 'DELETE' }
+            : { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: jsonStr };
+          fetchWithTimeout(`${fbUrl}/eduSigs/${sessionId}/${groupKey}/${safeKey}.json`, reqOpts, 8000).then(res => {
+            relayStatus.firebase = res.ok ? 'ok' : ('HTTP ' + res.status);
+            if (res.ok) {
+              checkAndUpdateBrokerBadge();
+            } else if (retryLeft > 0) {
+              setTimeout(() => sendFbSig(retryLeft - 1), 1200);
+            }
+          }).catch(() => {
+            if (retryLeft > 0) {
+              setTimeout(() => sendFbSig(retryLeft - 1), 1200);
+            }
+          });
+        };
+        sendFbSig(3);
       }
     }
 
@@ -1881,7 +1915,7 @@
       if (appData && appData.firebaseDbUrl && appData.firebaseDbUrl.startsWith('http')) {
         return appData.firebaseDbUrl.replace(/\/+$/, '');
       }
-      return '';
+      return DEFAULT_FIREBASE_DB_URL;
     }
 
     // [핵심] 표준 HTTPS(443 포트) GET 폴링 & SSE 스트림 수신 엔진 (사내 PC에서 웹소켓이 막혀 있어도 100% 실시간 연동!)
@@ -1931,7 +1965,7 @@
               }
               // 이전 상태 메시지에 들어있는 서명 메타데이터도 누락 없이 병합
               if (data.sigMap) {
-                applyRemoteStatePayload({ sigMap: data.sigMap });
+                applyRemoteStatePayload({ eduEpoch: data.eduEpoch, ts: data.ts, sigMap: data.sigMap });
               }
             } else if (ev.topic === HTTP_TOPIC_SIGS) {
               sigMsgs.push(data);
@@ -2021,12 +2055,19 @@
       }, 600);
 
       // 4. 사내 방화벽 프록시 환경을 위한 백업 HTTPS 폴링 (SSE가 실시간 수신을 담당하며, 15초 주기 백업으로 429 차단 방지)
+      // Firebase 실시간 DB (TBM 일지 방식) 2.5초 고속 동기화 루프
+      setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          pullFirebaseData();
+        }
+      }, 2500);
+
+      // 보조 HTTPS 릴레이 12초 백업 루프
       setInterval(() => {
         if (document.visibilityState === 'visible') {
           pullHttpRelayData(false);
-          pullFirebaseData();
         }
-      }, 8000);
+      }, 12000);
     }
 
     async function pullFirebaseData() {
@@ -2034,15 +2075,20 @@
       if (!fbUrl) return;
       try {
         const [stRes, sigRes] = await Promise.all([
-          fetchWithTimeout(`${fbUrl}/eduState.json`, {}, 8000),
-          fetchWithTimeout(`${fbUrl}/eduSigs.json`, {}, 8000)
+          fetchWithTimeout(`${fbUrl}/eduState.json?_t=${Date.now()}`, { cache: 'no-store' }, 8000),
+          fetchWithTimeout(`${fbUrl}/eduSigs.json?_t=${Date.now()}`, { cache: 'no-store' }, 8000)
         ]);
         relayStatus.firebase = stRes.ok ? 'ok' : ('HTTP ' + stRes.status);
         if (stRes.ok) {
+          checkAndUpdateBrokerBadge();
           const stData = await stRes.json();
-          if (stData && stData.sender !== DEVICE_ID && stData.ts !== lastFbStateTs) {
-            lastFbStateTs = stData.ts;
-            applyRemoteStatePayload(stData);
+          if (stData && stData.sender !== DEVICE_ID) {
+            const stHash = `${stData.ts}_${stData.lastAdminEditTs}_${stData.sessionsEditTs}_${stData.pinChangedTs}_${stData.authCode}_${stData.eduEpoch}`;
+            if (stHash !== lastFbStateHash) {
+              lastFbStateHash = stHash;
+              lastFbStateTs = stData.ts;
+              applyRemoteStatePayload(stData);
+            }
           }
         }
         if (sigRes.ok) {
@@ -2066,6 +2112,7 @@
         }
       } catch (e) {
         relayStatus.firebase = 'fail';
+        checkAndUpdateBrokerBadge();
         console.warn('Firebase pull error:', e);
       }
     }
@@ -2073,7 +2120,7 @@
     function checkAndUpdateBrokerBadge() {
       const connectedCnt = mqttClients.filter(c => c && c.connected).length;
       activeBrokerCount = connectedCnt;
-      if (connectedCnt > 0 || httpRelayConnected) {
+      if (relayStatus.firebase === 'ok' || connectedCnt > 0 || httpRelayConnected) {
         updateSyncBadgeUI('실시간연동', true);
       } else {
         updateSyncBadgeUI('재연결중', false);
@@ -2191,7 +2238,7 @@
         body: JSON.stringify({ sender: DEVICE_ID, cmd: 'REQUEST_SYNC', ts: Date.now() })
       }, 8000).catch(() => {});
       Object.keys(fbSigSeen).forEach(k => delete fbSigSeen[k]);
-      lastFbStateTs = 0;
+      lastFbStateTs = 0; lastFbStateHash = '';
       await Promise.all([
         pullHttpRelayData(true),
         pullFirebaseData()
@@ -2212,17 +2259,21 @@
         }).length;
         const mqttCnt = mqttClients.filter(c => c && c.connected).length;
         const chInfo = [];
+        if (relayStatus.firebase === 'ok') chInfo.push('Firebase:OK');
         if (mqttCnt > 0) chInfo.push(`MQTT:${mqttCnt}`);
         if (httpRelayConnected) chInfo.push('HTTPS:OK');
         const chText = chInfo.length > 0 ? chInfo.join(', ') : '오프라인';
-        const problems = [];
-        if (relayStatus.poll && relayStatus.poll !== 'ok') problems.push('HTTPS릴레이 ' + relayStatus.poll + ' (사내망 차단 의심)');
-        if (relayStatus.firebase && relayStatus.firebase !== 'ok') problems.push('Firebase ' + relayStatus.firebase);
-        if (epochRejectCount > 0) problems.push('서명 ' + epochRejectCount + '건이 교육 식별자(ep) 불일치로 무시됨 → 현장 QR 재스캔 필요');
-        if (problems.length > 0) {
-          showToast(`⚠️ 동기화 문제: ${problems.join(' / ')}`, 6000);
+        if (relayStatus.firebase === 'ok') {
+          showToast(`🔄 실시간 동기화 완료 (Firebase 연동됨) · ${g.workTerm} ${workCnt}${g.unit} / 서명 ${signedCnt}${g.unit}`);
         } else {
-          showToast(`🔄 동기화 완료 (${chText}) · ${g.workTerm} ${workCnt}${g.unit} / 서명 ${signedCnt}${g.unit}`);
+          const problems = [];
+          if (relayStatus.firebase && relayStatus.firebase !== 'ok') problems.push('Firebase ' + relayStatus.firebase);
+          if (relayStatus.poll && relayStatus.poll !== 'ok') problems.push('HTTPS릴레이 ' + relayStatus.poll);
+          if (problems.length > 0) {
+            showToast(`⚠️ 동기화 확인: ${problems.join(' / ')}`, 5000);
+          } else {
+            showToast(`🔄 동기화 완료 (${chText}) · ${g.workTerm} ${workCnt}${g.unit} / 서명 ${signedCnt}${g.unit}`);
+          }
         }
       }, 400);
     }
@@ -2309,7 +2360,13 @@
     } else if (modeParam === 'worker' || modeParam === 'driver') {
       currentMode = 'worker';
     } else {
-      currentMode = 'worker';
+      currentMode = appData.currentMode || 'admin';
+      if (currentMode === 'admin' && !authParam && !sessionStorage.getItem(SESSION_STORAGE_KEY)) {
+        appData.authCode = generateRandomPin4();
+        appData.eduEpoch = generateEduEpoch();
+        appData.pinChangedTs = Date.now();
+        appData.lastAdminEditTs = Date.now();
+      }
     }
 
     if (authParam) {
@@ -2433,27 +2490,7 @@
       }
     }, 1500);
 
-    window.addEventListener('DOMContentLoaded', () => {
-      const adminInp = document.getElementById('adminAuthInput');
-      if (adminInp) {
-        adminInp.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') verifyAdminAuth();
-        });
-      }
-
-      const tSelect = document.getElementById('targetGroupSelect');
-      if (tSelect) tSelect.value = activeTargetGroup;
-
-      const hCode = document.getElementById('headerAuthCodeVal');
-      if (hCode) hCode.textContent = appData.authCode || '7429';
-
-      updateTopNav();
-      updateModeViews();
-      updateEduInfoDisplay();
-      renderAll();
-      initCanvas();
-      initMultiDeviceRealtimeSync();
-    });
+    // bootApp moved to end of script after all declarations
 
     // ==================== TOP NAVIGATION & MODE SWITCHING ====================
     function updateTopNav() {
@@ -3501,7 +3538,7 @@
         sigData = canvas ? compressSignatureCanvas(canvas) : '';
       } catch (err) {
         const nameText = currentSigningItem.driverName || currentSigningItem.carNo;
-        sigData = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40"><text x="10" y="25" font-family="sans-serif" font-size="16" font-weight="bold" fill="%230f172a">' + encodeURIComponent(nameText) + '</text></svg>';
+        sigData = makeFallbackStampSvg(nameText);
       }
 
       const now = new Date();
@@ -4384,6 +4421,10 @@
         appData.lastAdminEditTs = Date.now();
         appData.isExplicitReset = true;
         pendingRemoteSigPackets = {}; try { localStorage.removeItem(DEVICE_SIGN_LOCK_KEY); } catch (e) {}
+        const fbUrlReset = getActiveFirebaseUrl();
+        if (fbUrlReset) {
+          fetchWithTimeout(`${fbUrlReset}/eduSigs.json`, { method: 'DELETE' }, 8000).catch(() => {});
+        }
         const ta = document.getElementById('pasteTextArea');
         if (ta) ta.value = '';
         parsedUploadItems = { group: 'driver', roster: [] };
@@ -4420,6 +4461,10 @@
           appData.lastAdminEditTs = Date.now();
           appData.isExplicitReset = true;
           pendingRemoteSigPackets = {}; try { localStorage.removeItem(DEVICE_SIGN_LOCK_KEY); } catch (e) {}
+        const fbUrlReset = getActiveFirebaseUrl();
+        if (fbUrlReset) {
+          fetchWithTimeout(`${fbUrlReset}/eduSigs.json`, { method: 'DELETE' }, 8000).catch(() => {});
+        }
           parsedUploadItems = null;
           saveState(true, true);
           activeTargetGroup = 'driver';
@@ -4621,10 +4666,12 @@
       if (!inp) return;
       let val = inp.value.trim();
       if (!val) {
-        delete appData.firebaseDbUrl;
+        appData.firebaseDbUrl = DEFAULT_FIREBASE_DB_URL;
+        inp.value = DEFAULT_FIREBASE_DB_URL;
         saveState();
+        pullFirebaseData();
         renderQrContent();
-        showToast('기본 실시간 연동 모드로 설정되었습니다.');
+        showToast('기본 Firebase 실시간 DB로 복원되었습니다.');
         return;
       }
       if (!val.startsWith('http://') && !val.startsWith('https://')) {
@@ -5135,6 +5182,36 @@
         toast.classList.remove('opacity-100', 'translate-y-0');
         toast.classList.add('opacity-0', 'translate-y-2');
       }, duration || 2500);
+    }
+
+    let appBooted = false;
+    function bootApp() {
+      if (appBooted) return;
+      appBooted = true;
+      const adminInp = document.getElementById('adminAuthInput');
+      if (adminInp) {
+        adminInp.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') verifyAdminAuth();
+        });
+      }
+
+      const tSelect = document.getElementById('targetGroupSelect');
+      if (tSelect) tSelect.value = activeTargetGroup;
+
+      const hCode = document.getElementById('headerAuthCodeVal');
+      if (hCode) hCode.textContent = appData.authCode || '7429';
+
+      updateTopNav();
+      updateModeViews();
+      updateEduInfoDisplay();
+      renderAll();
+      initCanvas();
+      initMultiDeviceRealtimeSync();
+    }
+    if (document.readyState === 'loading') {
+      window.addEventListener('DOMContentLoaded', bootApp);
+    } else {
+      bootApp();
     }
   </script>
 </body>
